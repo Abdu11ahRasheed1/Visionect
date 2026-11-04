@@ -1,0 +1,48 @@
+# ==========================================
+# Visionect Security & GitHub Ignore Rules
+# ==========================================
+
+# 1. API Keys & Secrets (CRITICAL)
+.env
+.env.*
+!.env.example
+.kaggle/
+*.key
+*.pem
+secrets.json
+
+# 2. Large Datasets & Model Weights
+data/
+processed_data/
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+*.tar
+*.tar.gz
+*.zip
+
+# 3. Python Virtual Environment & Caches
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+
+# 4. Netlify Local Builds & Cache
+.netlify/
+
+# 5. OS Generated Files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# 6. Evaluation / Temporary Test Outputs
+eval_samples/
+output_samples/

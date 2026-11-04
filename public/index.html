@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VISIONECT — AI-Powered 3D Architectural Blueprint & Spatial Studio</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts: Barlow Condensed (Impact Display) + Plus Jakarta Sans (UI) + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Three.js + OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 1: HOME / LANDING & PROJECT SELECTION HUB -->
+    <!-- ========================================================================= -->
+    <div id="home-view" class="page-view active">
+        <!-- Top Navigation Bar -->
+        <nav class="home-nav">
+            <div class="brand">
+                <div class="logo-mark-solid">
+                    <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 2L29 9.5V22.5L16 30L3 22.5V9.5L16 2Z" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
+                        <path d="M16 2V16.5M16 16.5L29 9.5M16 16.5L3 9.5M16 16.5V30" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="brand-wordmark">
+                    <span class="word-white">VISION</span><span class="word-orange">ECT</span>
+                </div>
+            </div>
+
+            <div class="home-nav-links">
+                <a href="#presets-section" class="nav-link">PRESETS</a>
+                <a href="#custom-section" class="nav-link">CUSTOM STUDIO</a>
+                <a href="#features-section" class="nav-link">CAPABILITIES</a>
+                <a href="#presets-section" class="nav-link">BLUEPRINTS</a>
+            </div>
+
+            <div class="home-nav-actions">
+                <a href="#custom-section" class="nav-ghost-link">CAD COMPILER</a>
+                <button id="nav-launch-studio-btn" class="btn-solid-orange">
+                    LAUNCH 3D STUDIO
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Scrollable Container -->
+        <div class="home-scroll-container">
+            <!-- Full-Bleed Architectural Hero Section -->
+            <header class="hero-fullbleed">
+                <div class="hero-bg-media" style="background-image: url('assets/hero-bg.jpg');"></div>
+                <div class="hero-bg-overlay"></div>
+
+                <div class="hero-inner-grid">
+                    <!-- Left Column: High-Impact Headline & CTAs -->
+                    <div class="hero-left-col">
+                        <div class="hero-pill-badge">
+                            <span class="status-dot-green"></span>
+                            <span>NEW: AI-POWERED 3D SPATIAL ENGINE</span>
+                        </div>
+
+                        <h1 class="hero-display-title">
+                            <span class="line-white">TRANSFORM</span>
+                            <span class="line-white">YOUR BLUEPRINT</span>
+                            <span class="line-orange">INTO 3D REALITY</span>
+                        </h1>
+
+                        <p class="hero-lead-text">
+                            Generate watertight 3D floorplans with custom room specifications or curated architectural presets. Walk through doors in first-person WASD mode and stage furniture in real time.
+                        </p>
+
+                        <div class="hero-action-row">
+                            <button id="hero-start-studio-btn" class="btn-cta-orange">
+                                <span>LAUNCH 3D STUDIO</span>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                            <a href="#presets-section" class="btn-cta-outline">
+                                EXPLORE PRESETS
+                            </a>
+                        </div>
+
+                        <!-- Bottom Stats Row -->
+                        <div class="hero-stats-row">
+                            <div class="hero-stat-item">
+                                <span class="stat-num-orange">100%</span>
+                                <span class="stat-cap-muted">WATERTIGHT 3D MESH</span>
+                            </div>
+                            <div class="hero-stat-item">
+                                <span class="stat-num-orange">WASD</span>
+                                <span class="stat-cap-muted">FIRST-PERSON WALKTHROUGH</span>
+                            </div>
+                            <div class="hero-stat-item">
+                                <span class="stat-num-orange">2D + 3D</span>
+                                <span class="stat-cap-muted">LIVE BLUEPRINT SYNC</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- SECTION 1: CURATED ARCHITECTURAL PRESETS WITH GENERATED RENDERS -->
+            <section id="presets-section" class="home-section">
+                <div class="section-header">
+                    <div class="section-pill-tag">
+                        <span class="status-dot-green"></span>
+                        <span>CURATED ARCHITECTURAL BLUEPRINTS</span>
+                    </div>
+                    <h2 class="section-display-title">SELECT YOUR <span class="text-orange">STARTING TEMPLATE</span></h2>
+                    <p class="section-subtitle">Click any architectural template below to immediately extrude its 3D model, walk through rooms, and stage furniture.</p>
+                </div>
+
+                <div class="presets-grid">
+                    <!-- Preset Card 1: 1-Bed Studio -->
+                    <div class="preset-card" data-prompt="1 bedroom, 1 modern bathroom, 1 open kitchen, living room">
+                        <div class="preset-img-wrapper cad-blueprint-box">
+                            <svg class="cad-floorplan-svg" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <pattern id="cadGrid1" width="16" height="16" patternUnits="userSpaceOnUse">
+                                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#18181e" stroke-width="1"/>
+                                    </pattern>
+                                </defs>
+                                <rect width="320" height="200" fill="url(#cadGrid1)"/>
+                                <!-- Dimension Callout Top -->
+                                <line x1="45" y1="22" x2="275" y2="22" stroke="#52525b" stroke-width="1"/>
+                                <line x1="45" y1="18" x2="45" y2="26" stroke="#71717a" stroke-width="1.2"/>
+                                <line x1="275" y1="18" x2="275" y2="26" stroke="#71717a" stroke-width="1.2"/>
+                                <text x="160" y="18" fill="#71717a" font-size="8" font-family="JetBrains Mono" text-anchor="middle">8.0m</text>
+
+                                <!-- Room Zone Fills -->
+                                <rect x="45" y="32" width="130" height="144" fill="rgba(255, 90, 31, 0.08)"/>
+                                <rect x="175" y="32" width="100" height="86" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="175" y="118" width="100" height="58" fill="rgba(34, 197, 94, 0.06)"/>
+
+                                <!-- 2D CAD Furniture Symbols (Sofa, Island, Bed, Tub) -->
+                                <rect x="56" y="128" width="52" height="20" rx="2" stroke="#52525b" stroke-width="1.2" fill="rgba(255,255,255,0.03)"/>
+                                <rect x="66" y="112" width="32" height="11" rx="1" stroke="#3f3f46" stroke-width="1"/>
+                                <rect x="56" y="42" width="65" height="14" stroke="#52525b" stroke-width="1.2"/>
+                                <!-- Bed in Bedroom -->
+                                <rect x="218" y="46" width="46" height="38" rx="2" stroke="#52525b" stroke-width="1.2" fill="rgba(255,255,255,0.03)"/>
+                                <rect x="248" y="50" width="12" height="13" rx="1" stroke="#71717a" stroke-width="1"/>
+                                <rect x="248" y="67" width="12" height="13" rx="1" stroke="#71717a" stroke-width="1"/>
+                                <!-- Bath Tub -->
+                                <rect x="228" y="154" width="38" height="15" rx="4" stroke="#52525b" stroke-width="1.2"/>
+
+                                <!-- Structural Perimeter & Partition Walls -->
+                                <rect x="45" y="32" width="230" height="144" stroke="#f4f4f5" stroke-width="3.2"/>
+                                <!-- Vertical Partition with 2 Doorway Gaps -->
+                                <line x1="175" y1="32" x2="175" y2="74" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="175" y1="96" x2="175" y2="132" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="175" y1="152" x2="175" y2="176" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <!-- Horizontal Bath Partition -->
+                                <line x1="175" y1="118" x2="275" y2="118" stroke="#e4e4e7" stroke-width="2.4"/>
+
+                                <!-- Door Swing Arcs (Flame Orange) -->
+                                <line x1="175" y1="74" x2="197" y2="74" stroke="#ff5a1f" stroke-width="2"/>
+                                <path d="M 197 74 A 22 22 0 0 1 175 96" stroke="#ff5a1f" stroke-width="1.3" stroke-dasharray="3 2" fill="none"/>
+                                <line x1="175" y1="132" x2="195" y2="132" stroke="#ff5a1f" stroke-width="2"/>
+                                <path d="M 195 132 A 20 20 0 0 1 175 152" stroke="#ff5a1f" stroke-width="1.3" stroke-dasharray="3 2" fill="none"/>
+
+                                <!-- Exterior Windows -->
+                                <line x1="85" y1="32" x2="135" y2="32" stroke="#ff5a1f" stroke-width="4"/>
+                                <line x1="205" y1="32" x2="245" y2="32" stroke="#ff5a1f" stroke-width="4"/>
+                                <line x1="80" y1="176" x2="130" y2="176" stroke="#ff5a1f" stroke-width="4"/>
+
+                                <!-- Room Labels -->
+                                <text x="110" y="88" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">LIVING &amp; KITCHEN</text>
+                                <text x="110" y="101" fill="#ff7440" font-size="8.5" font-family="JetBrains Mono" text-anchor="middle">4.5m × 6.0m</text>
+
+                                <text x="225" y="96" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">BEDROOM</text>
+                                <text x="225" y="108" fill="#a1a1aa" font-size="8" font-family="JetBrains Mono" text-anchor="middle">3.5m × 3.8m</text>
+
+                                <text x="225" y="142" fill="#e4e4e7" font-size="9" font-weight="700" text-anchor="middle">BATH</text>
+                            </svg>
+                            <span class="preset-top-tag">URBAN LOFT</span>
+                            <span class="preset-area-pill">48 m²</span>
+                        </div>
+                        <div class="preset-card-body">
+                            <h3 class="preset-title">1-Bed Minimalist Studio</h3>
+                            <p class="preset-desc">Compact urban loft featuring an open-plan kitchen island, sunlit living core, glass partition, and full bathroom.</p>
+                            <div class="preset-chips">
+                                <span>1 BEDROOM</span>
+                                <span>1 BATH</span>
+                                <span>OPEN KITCHEN</span>
+                            </div>
+                            <button class="preset-launch-btn">
+                                <span>OPEN IN 3D STUDIO</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preset Card 2: 2-Bed Modern Suite (Featured) -->
+                    <div class="preset-card featured-card" data-prompt="2 bedrooms, 1 bathroom, modern open kitchen, spacious living and dining area">
+                        <div class="preset-img-wrapper cad-blueprint-box">
+                            <svg class="cad-floorplan-svg" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="320" height="200" fill="url(#cadGrid1)"/>
+                                <!-- Dimension Callout Top -->
+                                <line x1="35" y1="20" x2="285" y2="20" stroke="#52525b" stroke-width="1"/>
+                                <text x="160" y="16" fill="#ff7440" font-size="8" font-family="JetBrains Mono" text-anchor="middle">16.0m × 13.0m</text>
+
+                                <!-- Room Zone Fills -->
+                                <rect x="35" y="28" width="140" height="74" fill="rgba(255, 90, 31, 0.10)"/>
+                                <rect x="175" y="28" width="110" height="74" fill="rgba(245, 158, 11, 0.08)"/>
+                                <rect x="35" y="102" width="92" height="74" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="127" y="102" width="66" height="74" fill="rgba(34, 197, 94, 0.07)"/>
+                                <rect x="193" y="102" width="92" height="74" fill="rgba(255, 255, 255, 0.04)"/>
+
+                                <!-- 2D Furniture Blocks -->
+                                <rect x="48" y="38" width="54" height="18" rx="2" stroke="#52525b" stroke-width="1.2"/>
+                                <rect x="205" y="36" width="68" height="14" stroke="#52525b" stroke-width="1.2"/>
+                                <rect x="46" y="132" width="38" height="34" rx="2" stroke="#52525b" stroke-width="1.2"/>
+                                <rect x="234" y="132" width="38" height="34" rx="2" stroke="#52525b" stroke-width="1.2"/>
+
+                                <!-- Outer Perimeter Wall -->
+                                <rect x="35" y="28" width="250" height="148" stroke="#ffffff" stroke-width="3.2"/>
+
+                                <!-- Interior Partitions with Door Cutouts -->
+                                <line x1="175" y1="28" x2="175" y2="54" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="175" y1="76" x2="175" y2="102" stroke="#e4e4e7" stroke-width="2.4"/>
+
+                                <!-- Central Spine Wall with 3 Door Cutouts -->
+                                <line x1="35" y1="102" x2="72" y2="102" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="94" y1="102" x2="148" y2="102" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="168" y1="102" x2="225" y2="102" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="247" y1="102" x2="285" y2="102" stroke="#e4e4e7" stroke-width="2.4"/>
+
+                                <!-- Bedroom & Bath Dividers -->
+                                <line x1="127" y1="102" x2="127" y2="176" stroke="#e4e4e7" stroke-width="2.4"/>
+                                <line x1="193" y1="102" x2="193" y2="176" stroke="#e4e4e7" stroke-width="2.4"/>
+
+                                <!-- Door Swing Arcs (Flame Orange) -->
+                                <line x1="175" y1="54" x2="197" y2="54" stroke="#ff5a1f" stroke-width="2"/>
+                                <path d="M 197 54 A 22 22 0 0 1 175 76" stroke="#ff5a1f" stroke-width="1.3" stroke-dasharray="3 2" fill="none"/>
+
+                                <line x1="72" y1="102" x2="72" y2="124" stroke="#ff5a1f" stroke-width="2"/>
+                                <path d="M 72 124 A 22 22 0 0 0 94 102" stroke="#ff5a1f" stroke-width="1.3" stroke-dasharray="3 2" fill="none"/>
+
+                                <line x1="148" y1="102" x2="148" y2="122" stroke="#ff5a1f" stroke-width="2"/>
+                                <path d="M 148 122 A 20 20 0 0 0 168 102" stroke="#ff5a1f" stroke-width="1.3" stroke-dasharray="3 2" fill="none"/>
+
+                                <line x1="225" y1="102" x2="225" y2="124" stroke="#ff5a1f" stroke-width="2"/>
+                                <path d="M 225 124 A 22 22 0 0 0 247 102" stroke="#ff5a1f" stroke-width="1.3" stroke-dasharray="3 2" fill="none"/>
+
+                                <!-- Exterior Windows -->
+                                <line x1="80" y1="28" x2="130" y2="28" stroke="#ff5a1f" stroke-width="4"/>
+                                <line x1="210" y1="28" x2="255" y2="28" stroke="#ff5a1f" stroke-width="4"/>
+                                <line x1="60" y1="176" x2="100" y2="176" stroke="#ff5a1f" stroke-width="4"/>
+                                <line x1="220" y1="176" x2="260" y2="176" stroke="#ff5a1f" stroke-width="4"/>
+
+                                <!-- Room Labels -->
+                                <text x="105" y="68" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">LIVING &amp; DINING</text>
+                                <text x="105" y="80" fill="#ff7440" font-size="8" font-family="JetBrains Mono" text-anchor="middle">9.0m × 7.0m</text>
+
+                                <text x="230" y="68" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">CHEF KITCHEN</text>
+                                <text x="230" y="80" fill="#a1a1aa" font-size="8" font-family="JetBrains Mono" text-anchor="middle">7.0m × 7.0m</text>
+
+                                <text x="81" y="142" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">MASTER BED</text>
+                                <text x="81" y="153" fill="#a1a1aa" font-size="7.5" font-family="JetBrains Mono" text-anchor="middle">6.0m × 6.0m</text>
+
+                                <text x="160" y="144" fill="#e4e4e7" font-size="8.5" font-weight="700" text-anchor="middle">BATH</text>
+
+                                <text x="239" y="142" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">GUEST BED</text>
+                                <text x="239" y="153" fill="#a1a1aa" font-size="7.5" font-family="JetBrains Mono" text-anchor="middle">6.0m × 6.0m</text>
+                            </svg>
+                            <span class="preset-top-tag featured-tag">★ MOST POPULAR</span>
+                            <span class="preset-area-pill">88 m²</span>
+                        </div>
+                        <div class="preset-card-body">
+                            <h3 class="preset-title">2-Bed Modern Suite</h3>
+                            <p class="preset-desc">Balanced contemporary layout with an open living-dining heart, waterfall chef's kitchen, master bedroom, and guest suite.</p>
+                            <div class="preset-chips">
+                                <span>2 BEDROOMS</span>
+                                <span>1 BATH</span>
+                                <span>CHEF KITCHEN</span>
+                                <span>LIVING CORE</span>
+                            </div>
+                            <button class="preset-launch-btn">
+                                <span>OPEN IN 3D STUDIO</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preset Card 3: 3-Bed Executive Villa -->
+                    <div class="preset-card" data-prompt="3 bedrooms, 2 bathrooms, master ensuite, large living room, kitchen">
+                        <div class="preset-img-wrapper cad-blueprint-box">
+                            <svg class="cad-floorplan-svg" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="320" height="200" fill="url(#cadGrid1)"/>
+                                <text x="160" y="16" fill="#71717a" font-size="8" font-family="JetBrains Mono" text-anchor="middle">20.0m × 13.0m</text>
+
+                                <!-- Room Zone Fills -->
+                                <rect x="25" y="26" width="155" height="74" fill="rgba(255, 90, 31, 0.09)"/>
+                                <rect x="180" y="26" width="115" height="74" fill="rgba(245, 158, 11, 0.08)"/>
+                                <rect x="25" y="100" width="62" height="76" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="87" y="100" width="44" height="76" fill="rgba(34, 197, 94, 0.07)"/>
+                                <rect x="131" y="100" width="60" height="76" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="191" y="100" width="58" height="76" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="249" y="100" width="46" height="76" fill="rgba(34, 197, 94, 0.07)"/>
+
+                                <!-- Outer Perimeter -->
+                                <rect x="25" y="26" width="270" height="150" stroke="#ffffff" stroke-width="3.2"/>
+
+                                <!-- Living / Kitchen Divider with Door -->
+                                <line x1="180" y1="26" x2="180" y2="54" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="180" y1="74" x2="180" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+
+                                <!-- Spine Wall with Doorways -->
+                                <line x1="25" y1="100" x2="46" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="64" y1="100" x2="100" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="116" y1="100" x2="152" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="170" y1="100" x2="210" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="228" y1="100" x2="262" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="278" y1="100" x2="295" y2="100" stroke="#e4e4e7" stroke-width="2.2"/>
+
+                                <!-- Back Row Partitions -->
+                                <line x1="87" y1="100" x2="87" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="131" y1="100" x2="131" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="191" y1="100" x2="191" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="249" y1="100" x2="249" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+
+                                <!-- Door Arcs -->
+                                <path d="M 180 54 L 198 54 A 18 18 0 0 1 180 74" stroke="#ff5a1f" stroke-width="1.4" fill="none"/>
+                                <path d="M 46 100 L 46 118 A 18 18 0 0 0 64 100" stroke="#ff5a1f" stroke-width="1.4" fill="none"/>
+                                <path d="M 100 100 L 100 116 A 16 16 0 0 0 116 100" stroke="#ff5a1f" stroke-width="1.4" fill="none"/>
+                                <path d="M 152 100 L 152 118 A 18 18 0 0 0 170 100" stroke="#ff5a1f" stroke-width="1.4" fill="none"/>
+                                <path d="M 210 100 L 210 118 A 18 18 0 0 0 228 100" stroke="#ff5a1f" stroke-width="1.4" fill="none"/>
+                                <path d="M 262 100 L 262 116 A 16 16 0 0 0 278 100" stroke="#ff5a1f" stroke-width="1.4" fill="none"/>
+
+                                <!-- Windows -->
+                                <line x1="75" y1="26" x2="130" y2="26" stroke="#ff5a1f" stroke-width="4"/>
+                                <line x1="215" y1="26" x2="260" y2="26" stroke="#ff5a1f" stroke-width="4"/>
+
+                                <!-- Room Labels -->
+                                <text x="102" y="64" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">GREAT ROOM</text>
+                                <text x="102" y="76" fill="#ff7440" font-size="8" font-family="JetBrains Mono" text-anchor="middle">11.0m × 7.0m</text>
+                                <text x="237" y="64" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">KITCHEN</text>
+                                <text x="237" y="76" fill="#a1a1aa" font-size="8" font-family="JetBrains Mono" text-anchor="middle">9.0m × 7.0m</text>
+
+                                <text x="56" y="142" fill="#ffffff" font-size="8.5" font-weight="700" text-anchor="middle">MASTER</text>
+                                <text x="109" y="142" fill="#a1a1aa" font-size="8" font-weight="600" text-anchor="middle">BATH 1</text>
+                                <text x="161" y="142" fill="#ffffff" font-size="8.5" font-weight="700" text-anchor="middle">BED 2</text>
+                                <text x="220" y="142" fill="#ffffff" font-size="8.5" font-weight="700" text-anchor="middle">BED 3</text>
+                                <text x="272" y="142" fill="#a1a1aa" font-size="8" font-weight="600" text-anchor="middle">BATH 2</text>
+                            </svg>
+                            <span class="preset-top-tag">EXECUTIVE VILLA</span>
+                            <span class="preset-area-pill">145 m²</span>
+                        </div>
+                        <div class="preset-card-body">
+                            <h3 class="preset-title">3-Bed Executive Villa</h3>
+                            <p class="preset-desc">Expansive family footprint featuring a double-height great room, private master ensuite, guest bathroom, and culinary wing.</p>
+                            <div class="preset-chips">
+                                <span>3 BEDROOMS</span>
+                                <span>2 BATHS</span>
+                                <span>MASTER ENSUITE</span>
+                            </div>
+                            <button class="preset-launch-btn">
+                                <span>OPEN IN 3D STUDIO</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preset Card 4: 4-Bed Luxury Estate -->
+                    <div class="preset-card" data-prompt="4 bedrooms, 2 bathrooms, 2 kitchens, large living room">
+                        <div class="preset-img-wrapper cad-blueprint-box">
+                            <svg class="cad-floorplan-svg" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="320" height="200" fill="url(#cadGrid1)"/>
+                                <text x="160" y="16" fill="#71717a" font-size="8" font-family="JetBrains Mono" text-anchor="middle">24.0m × 13.0m</text>
+
+                                <!-- Room Zone Fills -->
+                                <rect x="20" y="26" width="126" height="72" fill="rgba(255, 90, 31, 0.09)"/>
+                                <rect x="146" y="26" width="78" height="72" fill="rgba(245, 158, 11, 0.08)"/>
+                                <rect x="224" y="26" width="76" height="72" fill="rgba(245, 158, 11, 0.05)"/>
+                                <rect x="20" y="98" width="280" height="78" fill="rgba(255, 255, 255, 0.03)"/>
+
+                                <!-- Outer Perimeter -->
+                                <rect x="20" y="26" width="280" height="150" stroke="#ffffff" stroke-width="3.2"/>
+
+                                <!-- Front Zone Dividers -->
+                                <line x1="146" y1="26" x2="146" y2="98" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="224" y1="26" x2="224" y2="98" stroke="#e4e4e7" stroke-width="2.2"/>
+
+                                <!-- Spine Wall -->
+                                <line x1="20" y1="98" x2="300" y2="98" stroke="#e4e4e7" stroke-width="2.2"/>
+
+                                <!-- 6 Back Rooms (4 Beds + 2 Baths) -->
+                                <line x1="68" y1="98" x2="68" y2="176" stroke="#e4e4e7" stroke-width="2"/>
+                                <line x1="116" y1="98" x2="116" y2="176" stroke="#e4e4e7" stroke-width="2"/>
+                                <line x1="164" y1="98" x2="164" y2="176" stroke="#e4e4e7" stroke-width="2"/>
+                                <line x1="212" y1="98" x2="212" y2="176" stroke="#e4e4e7" stroke-width="2"/>
+                                <line x1="256" y1="98" x2="256" y2="176" stroke="#e4e4e7" stroke-width="2"/>
+
+                                <!-- Door Indicators (Flame Orange) -->
+                                <circle cx="44" cy="98" r="4" fill="#ff5a1f"/>
+                                <circle cx="92" cy="98" r="4" fill="#ff5a1f"/>
+                                <circle cx="140" cy="98" r="4" fill="#ff5a1f"/>
+                                <circle cx="188" cy="98" r="4" fill="#ff5a1f"/>
+                                <circle cx="234" cy="98" r="4" fill="#ff5a1f"/>
+                                <circle cx="278" cy="98" r="4" fill="#ff5a1f"/>
+                                <circle cx="146" cy="62" r="4" fill="#ff5a1f"/>
+                                <circle cx="224" cy="62" r="4" fill="#ff5a1f"/>
+
+                                <!-- Labels -->
+                                <text x="83" y="62" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">GRAND SALON</text>
+                                <text x="83" y="74" fill="#ff7440" font-size="7.5" font-family="JetBrains Mono" text-anchor="middle">10.8m × 7.0m</text>
+                                <text x="185" y="64" fill="#ffffff" font-size="8.5" font-weight="700" text-anchor="middle">MAIN KITCHEN</text>
+                                <text x="262" y="64" fill="#e4e4e7" font-size="8.5" font-weight="700" text-anchor="middle">PREP KITCHEN</text>
+
+                                <text x="44" y="140" fill="#ffffff" font-size="8" font-weight="700" text-anchor="middle">BED 1</text>
+                                <text x="92" y="140" fill="#ffffff" font-size="8" font-weight="700" text-anchor="middle">BED 2</text>
+                                <text x="140" y="140" fill="#ffffff" font-size="8" font-weight="700" text-anchor="middle">BED 3</text>
+                                <text x="188" y="140" fill="#ffffff" font-size="8" font-weight="700" text-anchor="middle">BED 4</text>
+                                <text x="234" y="140" fill="#a1a1aa" font-size="7.5" font-weight="600" text-anchor="middle">BATH 1</text>
+                                <text x="278" y="140" fill="#a1a1aa" font-size="7.5" font-weight="600" text-anchor="middle">BATH 2</text>
+                            </svg>
+                            <span class="preset-top-tag">LUXURY ESTATE</span>
+                            <span class="preset-area-pill">210 m²</span>
+                        </div>
+                        <div class="preset-card-body">
+                            <h3 class="preset-title">4-Bed Executive Estate</h3>
+                            <p class="preset-desc">Multi-wing architectural residence equipped with dual kitchens (show & prep pantry), four private bedroom suites, and two full baths.</p>
+                            <div class="preset-chips">
+                                <span>4 BEDROOMS</span>
+                                <span>2 BATHS</span>
+                                <span>2 KITCHENS</span>
+                                <span>GRAND SALON</span>
+                            </div>
+                            <button class="preset-launch-btn">
+                                <span>OPEN IN 3D STUDIO</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preset Card 5: Penthouse Sky Loft -->
+                    <div class="preset-card" data-prompt="2 luxury master bedrooms, 2 marble bathrooms, open chef kitchen island, panoramic living lounge">
+                        <div class="preset-img-wrapper cad-blueprint-box">
+                            <svg class="cad-floorplan-svg" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="320" height="200" fill="url(#cadGrid1)"/>
+                                <text x="160" y="16" fill="#71717a" font-size="8" font-family="JetBrains Mono" text-anchor="middle">16.0m × 13.0m</text>
+
+                                <!-- Room Zone Fills -->
+                                <rect x="30" y="28" width="150" height="74" fill="rgba(255, 90, 31, 0.10)"/>
+                                <rect x="180" y="28" width="110" height="74" fill="rgba(245, 158, 11, 0.08)"/>
+                                <rect x="30" y="102" width="75" height="74" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="105" y="102" width="55" height="74" fill="rgba(34, 197, 94, 0.07)"/>
+                                <rect x="160" y="102" width="75" height="74" fill="rgba(255, 255, 255, 0.04)"/>
+                                <rect x="235" y="102" width="55" height="74" fill="rgba(34, 197, 94, 0.07)"/>
+
+                                <!-- Outer Perimeter -->
+                                <rect x="30" y="28" width="260" height="148" stroke="#ffffff" stroke-width="3.2"/>
+
+                                <!-- Interior Walls -->
+                                <line x1="180" y1="28" x2="180" y2="54" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="180" y1="76" x2="180" y2="102" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="30" y1="102" x2="290" y2="102" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="105" y1="102" x2="105" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="160" y1="102" x2="160" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+                                <line x1="235" y1="102" x2="235" y2="176" stroke="#e4e4e7" stroke-width="2.2"/>
+
+                                <!-- Door Arcs -->
+                                <path d="M 180 54 L 200 54 A 20 20 0 0 1 180 76" stroke="#ff5a1f" stroke-width="1.5" fill="none"/>
+                                <circle cx="67" cy="102" r="4" fill="#ff5a1f"/>
+                                <circle cx="132" cy="102" r="4" fill="#ff5a1f"/>
+                                <circle cx="197" cy="102" r="4" fill="#ff5a1f"/>
+                                <circle cx="262" cy="102" r="4" fill="#ff5a1f"/>
+
+                                <!-- Labels -->
+                                <text x="105" y="64" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">SKY LOUNGE</text>
+                                <text x="105" y="76" fill="#ff7440" font-size="8" font-family="JetBrains Mono" text-anchor="middle">8.8m × 7.0m</text>
+                                <text x="235" y="64" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">ISLAND BAR</text>
+                                <text x="235" y="76" fill="#a1a1aa" font-size="8" font-family="JetBrains Mono" text-anchor="middle">7.2m × 7.0m</text>
+
+                                <text x="67" y="142" fill="#ffffff" font-size="8.5" font-weight="700" text-anchor="middle">MASTER 1</text>
+                                <text x="132" y="142" fill="#a1a1aa" font-size="8" font-weight="600" text-anchor="middle">SPA 1</text>
+                                <text x="197" y="142" fill="#ffffff" font-size="8.5" font-weight="700" text-anchor="middle">MASTER 2</text>
+                                <text x="262" y="142" fill="#a1a1aa" font-size="8" font-weight="600" text-anchor="middle">SPA 2</text>
+                            </svg>
+                            <span class="preset-top-tag">SKY PENTHOUSE</span>
+                            <span class="preset-area-pill">165 m²</span>
+                        </div>
+                        <div class="preset-card-body">
+                            <h3 class="preset-title">Penthouse Sky Loft</h3>
+                            <p class="preset-desc">Panoramic night-lit architectural loft featuring dual master wings, spa marble bathrooms, and an illuminated island bar.</p>
+                            <div class="preset-chips">
+                                <span>2 MASTER WINGS</span>
+                                <span>2 SPA BATHS</span>
+                                <span>ISLAND BAR</span>
+                            </div>
+                            <button class="preset-launch-btn">
+                                <span>OPEN IN 3D STUDIO</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: INTERACTIVE CUSTOM STUDIO CONFIGURATOR -->
+            <section id="custom-section" class="home-section">
+                <div class="section-header">
+                    <div class="section-pill-tag">
+                        <span class="status-dot-green"></span>
+                        <span>PARAMETRIC CAD CONFIGURATOR</span>
+                    </div>
+                    <h2 class="section-display-title">BUILD YOUR <span class="text-orange">CUSTOM FLOORPLAN</span></h2>
+                    <p class="section-subtitle">Configure bedrooms, bathrooms, kitchen concepts, and floor materials with automatic topological constraint verification.</p>
+                </div>
+
+                <div class="custom-builder-glass-panel">
+                    <div class="builder-columns">
+                        <!-- Left Column: Interactive Controls -->
+                        <div class="builder-controls-column">
+                            <!-- Bedrooms Selector -->
+                            <div class="builder-group">
+                                <label class="builder-label">
+                                    <span class="label-name">01 / BEDROOMS</span>
+                                    <span class="label-val" id="builder-bed-val">2 Bedrooms</span>
+                                </label>
+                                <div class="selector-pills" id="bed-pills">
+                                    <button class="choice-pill" data-val="1">1 Bed</button>
+                                    <button class="choice-pill active" data-val="2">2 Beds</button>
+                                    <button class="choice-pill" data-val="3">3 Beds</button>
+                                    <button class="choice-pill" data-val="4">4 Beds</button>
+                                    <button class="choice-pill" data-val="5">5 Beds</button>
+                                </div>
+                            </div>
+
+                            <!-- Bathrooms Selector -->
+                            <div class="builder-group">
+                                <label class="builder-label">
+                                    <span class="label-name">02 / BATHROOMS</span>
+                                    <span class="label-val" id="builder-bath-val">1 Bathroom</span>
+                                </label>
+                                <div class="selector-pills" id="bath-pills">
+                                    <button class="choice-pill active" data-val="1">1 Bath</button>
+                                    <button class="choice-pill" data-val="2">2 Baths</button>
+                                    <button class="choice-pill" data-val="3">3 Baths</button>
+                                </div>
+                            </div>
+
+                            <!-- Kitchen Concept -->
+                            <div class="builder-group">
+                                <label class="builder-label">
+                                    <span class="label-name">03 / CULINARY ZONE</span>
+                                    <span class="label-val" id="builder-kit-val">Open Concept</span>
+                                </label>
+                                <div class="selector-pills" id="kit-pills">
+                                    <button class="choice-pill active" data-val="modern open kitchen">Open Concept</button>
+                                    <button class="choice-pill" data-val="chef island kitchen">Chef's Island</button>
+                                    <button class="choice-pill" data-val="2 kitchens with prep pantry">Dual Kitchens</button>
+                                </div>
+                            </div>
+
+                            <!-- Special Features -->
+                            <div class="builder-group">
+                                <label class="builder-label">
+                                    <span class="label-name">04 / ARCHITECTURAL ZONES</span>
+                                    <span class="label-val">Multi-Select</span>
+                                </label>
+                                <div class="selector-pills" id="feature-pills">
+                                    <button class="toggle-pill active" data-tag="spacious living room">Living & Dining</button>
+                                    <button class="toggle-pill active" data-tag="master ensuite">Master Ensuite</button>
+                                    <button class="toggle-pill" data-tag="home office workspace">Home Office</button>
+                                    <button class="toggle-pill" data-tag="outdoor dining patio">Dining Patio</button>
+                                    <button class="toggle-pill" data-tag="walk-in closet dressing room">Walk-in Closet</button>
+                                </div>
+                            </div>
+
+                            <!-- Floor Material Style -->
+                            <div class="builder-group">
+                                <label class="builder-label">
+                                    <span class="label-name">05 / SURFACE FINISH</span>
+                                </label>
+                                <div class="selector-pills" id="floor-style-pills">
+                                    <button class="choice-pill active" data-floor="wood">Hardwood Oak</button>
+                                    <button class="choice-pill" data-floor="darkwood">Walnut Parquet</button>
+                                    <button class="choice-pill" data-floor="tile">Ceramic Tile</button>
+                                    <button class="choice-pill" data-floor="concrete">Polished Concrete</button>
+                                    <button class="choice-pill" data-floor="marble">Carrara Marble</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Real-Time Prompt Preview & Direct Launch -->
+                        <div class="builder-preview-column">
+                            <div class="preview-card-header">
+                                <span class="preview-badge">LIVE SPECIFICATION COMPILER</span>
+                                <span class="preview-status-pill">● READY TO EXTRUDE</span>
+                            </div>
+
+                            <div class="preview-prompt-box">
+                                <label class="prompt-box-label">Compiled Architectural Specification:</label>
+                                <textarea id="custom-prompt-textarea" rows="4">2 bedrooms, 1 bathroom, modern open kitchen, spacious living room, master ensuite</textarea>
+                            </div>
+
+                            <!-- Quick Suggestion Pills -->
+                            <div class="quick-tags">
+                                <span class="quick-tag-label">Inject modifier:</span>
+                                <button class="tag-add-btn" data-insert="with panoramic garden windows">+ Garden Windows</button>
+                                <button class="tag-add-btn" data-insert="with double vanities">+ Double Vanities</button>
+                                <button class="tag-add-btn" data-insert="high ceilings open loft">+ High Ceilings</button>
+                            </div>
+
+                            <!-- Launch Button -->
+                            <button id="launch-custom-studio-btn" class="btn-builder-launch">
+                                <div class="btn-builder-content">
+                                    <span class="btn-launch-title">GENERATE CUSTOM 3D SPACE</span>
+                                    <span class="btn-launch-sub">Compile Watertight Walls & Launch Interactive Studio</span>
+                                </div>
+                                <div class="btn-builder-arrow">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 3: ARCHITECTURAL CAPABILITIES -->
+            <section id="features-section" class="home-section">
+                <div class="section-header">
+                    <div class="section-pill-tag">
+                        <span class="status-dot-green"></span>
+                        <span>SPATIAL ENGINEERING</span>
+                    </div>
+                    <h2 class="section-display-title">BUILT FOR <span class="text-orange">PRECISION ARCHITECTURE</span></h2>
+                    <p class="section-subtitle">Every wall segment, window aperture, and doorway is physically carved in 3D space.</p>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-glass-card">
+                        <div class="feature-num">01</div>
+                        <h3 class="feature-title">Watertight Wall Cutouts</h3>
+                        <p class="feature-desc">Physical wall segmentation carves 1.0m sills and 2.2m lintels for transparent glass windows and walk-through door openings.</p>
+                    </div>
+
+                    <div class="feature-glass-card">
+                        <div class="feature-num">02</div>
+                        <h3 class="feature-title">WASD First-Person Walk</h3>
+                        <p class="feature-desc">Explore interior spaces at eye level with WASD movement and 360° look. Click any door to swing it open and enter the room.</p>
+                    </div>
+
+                    <div class="feature-glass-card">
+                        <div class="feature-num">03</div>
+                        <h3 class="feature-title">Live 2D Named Blueprint</h3>
+                        <p class="feature-desc">Synchronized top-down CAD minimap displays named room zones, door swings, and player orientation. Click any room to teleport.</p>
+                    </div>
+
+                    <div class="feature-glass-card">
+                        <div class="feature-num">04</div>
+                        <h3 class="feature-title">3D Furniture Staging</h3>
+                        <p class="feature-desc">Spawn sofas, king beds, islands, dining sets, and lamps from the catalog and drag-and-drop them across the floorplan in real time.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Home Footer -->
+            <footer class="home-footer">
+                <div class="footer-brand">
+                    <div class="logo-mark-solid small">
+                        <svg width="15" height="15" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M16 2L29 9.5V22.5L16 30L3 22.5V9.5L16 2Z" stroke="#ffffff" stroke-width="2.6"/>
+                        </svg>
+                    </div>
+                    <span class="word-white">VISION</span><span class="word-orange">ECT</span>
+                    <span class="footer-divider">|</span>
+                    <span>Generative Architectural CAD & 3D Spatial Engine</span>
+                </div>
+                <div class="footer-meta">
+                    <span>Watertight Mesh Extrusion • Three.js WebGL</span>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- VIEW 2: 3D CAD STUDIO & WORKSPACE -->
+    <!-- ========================================================================= -->
+    <div id="studio-view" class="page-view hidden">
+        <!-- Studio Header -->
+        <header class="app-header">
+            <div class="studio-header-left">
+                <!-- Back to Home Button -->
+                <button id="back-to-home-btn" class="back-home-btn" title="Back to Project Hub & Presets">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    <span>HOME</span>
+                </button>
+
+                <div class="brand">
+                    <div class="logo-mark-solid small">
+                        <svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M16 2L29 9.5V22.5L16 30L3 22.5V9.5L16 2Z" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="brand-wordmark">
+                        <span class="word-white">VISION</span><span class="word-orange">ECT</span>
+                        <span class="tag-studio">3D STUDIO</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Template Presets in Studio Bar -->
+            <div class="presets-container">
+                <span class="preset-label">TEMPLATES:</span>
+                <button class="preset-pill" data-prompt="1 bedroom, 1 modern bathroom, 1 open kitchen, living room">1-Bed Studio</button>
+                <button class="preset-pill active" data-prompt="2 bedrooms, 1 bathroom, modern open kitchen, spacious living and dining area">2-Bed Modern</button>
+                <button class="preset-pill" data-prompt="3 bedrooms, 2 bathrooms, master ensuite, large living room, kitchen">3-Bed Villa</button>
+                <button class="preset-pill" data-prompt="4 bedrooms, 2 bathrooms, 2 kitchens, large living room">4-Bed Estate</button>
+            </div>
+
+            <div class="header-status">
+                <span class="status-indicator"></span>
+                <span id="ai-status">CAD Engine Active</span>
+            </div>
+        </header>
+
+        <!-- Studio Main 3D Canvas Area -->
+        <main class="app-main">
+            <!-- 3D WebGL Canvas Container -->
+            <div id="canvas-container"></div>
+
+            <!-- Floating Prompt Bar -->
+            <div class="prompt-bar-container">
+                <div class="prompt-bar">
+                    <div class="search-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff5a1f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                    </div>
+                    <input type="text" id="prompt-input" placeholder="Enter layout specifications (e.g. 2 bedrooms, open kitchen, dining room, 1 bathroom)..." value="2 bedrooms, 1 bathroom, modern open kitchen, spacious living and dining area">
+                    <button id="generate-btn">
+                        <span class="btn-text">GENERATE 3D</span>
+                        <div class="spinner" id="btn-spinner"></div>
+                    </button>
+                </div>
+                <!-- Irregular Prompt Warning Banner -->
+                <div id="irregular-alert" class="irregular-alert hidden">
+                    <span class="alert-icon">⚠️</span>
+                    <span id="irregular-msg">Irregular specification</span>
+                </div>
+            </div>
+
+            <!-- Always-Visible 2D Layout Blueprint Overlay (Left Panel) -->
+            <div class="live-blueprint-panel" id="live-blueprint-panel">
+                <div class="live-bp-header">
+                    <div class="live-bp-title">
+                        <span class="bp-dot"></span>
+                        <span>2D ARCHITECTURAL BLUEPRINT</span>
+                    </div>
+                    <button id="minimize-bp-btn" class="bp-min-btn" title="Minimize/Expand 2D Map">_</button>
+                </div>
+                <div class="live-bp-body" id="live-bp-body">
+                    <canvas id="live-2d-canvas" width="310" height="240"></canvas>
+                    <div class="live-bp-legend">
+                        <span><i class="leg-box wall"></i>Wall</span>
+                        <span><i class="leg-box door"></i>Door (Click in 3D)</span>
+                        <span><i class="leg-box win"></i>Window</span>
+                        <span><i class="leg-box player"></i>You</span>
+                    </div>
+                    <div class="live-bp-hint">Click any room on 2D map to teleport inside</div>
+                </div>
+            </div>
+
+            <!-- Walkthrough Mode HUD & Controls Guide -->
+            <div id="walkthrough-hud" class="walkthrough-hud hidden">
+                <div class="walk-location">
+                    <span class="loc-pin">📍</span>
+                    <span id="current-room-label">Living & Dining Room</span>
+                </div>
+                <div class="walk-keys">
+                    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Walk
+                    <span class="hud-sep">•</span>
+                    <span>🖱️ Drag to Look 360°</span>
+                    <span class="hud-sep">•</span>
+                    <span>🚪 <strong>Click Any Door</strong> to Open & Enter Room</span>
+                </div>
+                <button id="exit-walk-btn" class="exit-walk-btn">EXIT WALKTHROUGH</button>
+            </div>
+
+            <!-- Interactive Door Hover / Approach Prompt -->
+            <div id="door-tooltip" class="door-tooltip hidden">
+                🚪 Click Door to Open & Enter: <strong id="door-target-name">Room</strong>
+            </div>
+
+            <!-- Furniture Catalog Popup -->
+            <div id="furniture-catalog-modal" class="furniture-catalog-modal hidden">
+                <div class="catalog-header">
+                    <h4>STAGE FURNITURE IN 3D</h4>
+                    <button id="close-catalog-btn" class="close-btn">&times;</button>
+                </div>
+                <div class="catalog-grid">
+                    <div class="catalog-item" data-type="sofa">
+                        <span class="cat-icon">🛋️</span>
+                        <span class="cat-title">Modern Sofa</span>
+                    </div>
+                    <div class="catalog-item" data-type="bed">
+                        <span class="cat-icon">🛏️</span>
+                        <span class="cat-title">King Bed</span>
+                    </div>
+                    <div class="catalog-item" data-type="table">
+                        <span class="cat-icon">🪵</span>
+                        <span class="cat-title">Coffee Table</span>
+                    </div>
+                    <div class="catalog-item" data-type="dining">
+                        <span class="cat-icon">🪑</span>
+                        <span class="cat-title">Dining Set</span>
+                    </div>
+                    <div class="catalog-item" data-type="counter">
+                        <span class="cat-icon">🍳</span>
+                        <span class="cat-title">Kitchen Island</span>
+                    </div>
+                    <div class="catalog-item" data-type="tub">
+                        <span class="cat-icon">🛁</span>
+                        <span class="cat-title">Bathtub</span>
+                    </div>
+                    <div class="catalog-item" data-type="plant">
+                        <span class="cat-icon">🪴</span>
+                        <span class="cat-title">Indoor Plant</span>
+                    </div>
+                    <div class="catalog-item" data-type="lamp">
+                        <span class="cat-icon">💡</span>
+                        <span class="cat-title">Floor Lamp</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom 3D Viewport Controls -->
+            <div class="viewport-toolbar">
+                <div class="toolbar-group">
+                    <button id="view-3d-btn" class="toolbar-btn active" title="3D Perspective View">Perspective 3D</button>
+                    <button id="view-top-btn" class="toolbar-btn" title="Top-Down 2D Blueprint">Top 2D</button>
+                    <button id="view-walk-btn" class="toolbar-btn" title="First-Person WASD Walkthrough">🚶 Walkthrough (WASD)</button>
+                </div>
+                
+                <div class="toolbar-divider"></div>
+
+                <div class="toolbar-group">
+                    <label class="color-picker-label" title="Change Wall Color">
+                        <span>Wall</span>
+                        <input type="color" id="wall-color-picker" value="#f1f5f9">
+                    </label>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <div class="toolbar-group">
+                    <label class="select-label">
+                        <span>Floor:</span>
+                        <select id="floor-texture-select">
+                            <option value="wood">Hardwood Oak</option>
+                            <option value="darkwood">Walnut Parquet</option>
+                            <option value="tile">Ceramic Tile</option>
+                            <option value="concrete">Polished Concrete</option>
+                            <option value="marble">Carrara Marble</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <div class="toolbar-group">
+                    <button id="furniture-mode-btn" class="toolbar-btn" title="Click & Drag Furniture in 3D">🛋️ Move Furniture</button>
+                    <button id="add-furniture-btn" class="toolbar-btn-icon" title="Add More Furniture">+</button>
+                    <button id="toggle-labels-btn" class="toolbar-btn-icon active" title="Toggle 3D Room Name Labels">🏷️ Labels</button>
+                    <button id="reset-cam-btn" class="toolbar-btn-icon" title="Reset Camera">🎯 Center</button>
+                    <button id="toggle-sidebar-btn" class="toolbar-btn-icon" title="Toggle Room Specs & Export">📐 Specs</button>
+                </div>
+            </div>
+
+            <!-- Right Side Blueprint & Details Drawer -->
+            <aside class="side-drawer" id="side-drawer">
+                <div class="drawer-header">
+                    <h3>BLUEPRINT SPECIFICATIONS</h3>
+                    <button id="close-drawer-btn" class="close-btn">&times;</button>
+                </div>
+
+                <!-- Secondary 2D CAD Canvas in Drawer -->
+                <div class="blueprint-canvas-wrapper">
+                    <canvas id="cad-canvas" width="320" height="240"></canvas>
+                </div>
+
+                <div class="drawer-stats">
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-area">-- m²</span>
+                        <span class="stat-label">Total Area</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-rooms">--</span>
+                        <span class="stat-label">Rooms</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-doors">--</span>
+                        <span class="stat-label">Doors</span>
+                    </div>
+                </div>
+
+                <div class="drawer-section">
+                    <h4>Room Directory (Click to Enter)</h4>
+                    <div id="room-list" class="room-list">
+                        <p class="placeholder-text">Generate a floorplan to inspect room dimensions.</p>
+                    </div>
+                </div>
+
+                <div class="drawer-actions">
+                    <button id="export-json-btn" class="action-btn">EXPORT 3D SCENE JSON</button>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
