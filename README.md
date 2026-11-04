@@ -3,6 +3,7 @@
 # 🏛️ VISIONECT STUDIO
 ### Generative Architectural CAD & Real-Time 3D Spatial Engine
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-visionect.netlify.app-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://visionect.netlify.app/)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Three.js WebGL](https://img.shields.io/badge/Three.js-WebGL_2.0-000000?style=for-the-badge&logo=threedotjs&logoColor=white)](https://threejs.org/)
 [![Stable Diffusion LoRA](https://img.shields.io/badge/Diffusion-LoRA_CubiCasa5K-ff5a1f?style=for-the-badge)](https://huggingface.co/)
@@ -10,7 +11,9 @@
 
 **Transform natural-language room specifications and curated architectural presets into watertight 3D floorplans with real-time WASD walkthroughs, physical door/window cutouts, interactive furniture staging, and synchronized 2D CAD blueprints.**
 
-[Key Features](#-key-features) • [Fine-Tuned Weights](#-fine-tuned-model-weights-diffusion-lora) • [2D Blueprints](#-2d-floorplan-blueprints--cad-layouts) • [Benchmarks](#-output-results--evaluation-metrics) • [Netlify Guide](#️-netlify-deployment--secure-api-key-setup) • [Quick Start](#-quick-start)
+🚀 **Live Interactive Demo:** [https://visionect.netlify.app/](https://visionect.netlify.app/)
+
+[Live Demo](https://visionect.netlify.app/) • [Key Features](#-key-features) • [Fine-Tuned Weights](#-fine-tuned-model-weights-diffusion-lora) • [2D Blueprints](#-2d-floorplan-blueprints--cad-layouts) • [Benchmarks](#-output-results--evaluation-metrics) • [Quick Start](#-quick-start)
 
 </div>
 
@@ -171,33 +174,6 @@ python generate_blueprint.py \
   --lora_weights weights/visionect_blueprint_lora_final.pt \
   --output output_samples/custom_blueprint.png
 ```
-
----
-
-## ☁️ Netlify Deployment & Secure API Key Setup
-
-Visionect is optimized for zero-configuration deployment on **Netlify** with serverless functions.
-
-### How to use your Groq API Key securely on Netlify (100% Private, Zero GitHub Exposure):
-To keep your API key secure without exposing it in your public GitHub repository:
-
-1. **Deploy to Netlify:** Connect your GitHub repo (`Abdu11ahRasheed1/Visionect`) to Netlify.
-2. **Open Netlify Site Configuration:**
-   - In your Netlify dashboard, navigate to **Site configuration** (or **Site settings**).
-   - In the sidebar, select **Environment variables**.
-3. **Add the Key:**
-   - Click **Add a variable** -> **Add a single variable**.
-   - **Key:** `GROQ_API_KEY`
-   - **Value:** `<your_actual_groq_api_key>`
-   - **Scopes:** Select all scopes (Production, Deploy previews, Branch deploys).
-   - Click **Create variable**.
-4. **Trigger a Deploy:**
-   - Go to **Deploys** -> click **Trigger deploy** -> **Clear cache and deploy site**.
-
-> [!TIP]
-> **Why this is completely secure:** Netlify stores environment variables encrypted on their infrastructure and injects them only into the secure serverless runtime (`process.env.GROQ_API_KEY`). Your public GitHub repository contains **zero secrets**, and client-side browsers only speak to `/.netlify/functions/generate` without ever seeing the key.
-> 
-> Furthermore, Visionect's Netlify function contains an **automatic procedural CAD recovery engine** — so even if the key is missing or rate-limited, the application seamlessly synthesizes watertight 3D floorplans!
 
 ---
 
