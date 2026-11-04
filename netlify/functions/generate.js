@@ -249,8 +249,60 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2) {
         else groupedLines.push([orient, fc, [[Math.min(sc, ec), Math.max(sc, ec), rIdx]]]);
     });
 
-    const walls = [];
+    // Pass 1: Find candidate exterior perimeter walls for windows (min 2.2m length, no doors)
     const exteriorCandidates = [];
+    groupedLines.forEach(([orient, fc, intervals]) => {
+        const pts = Array.from(new Set(intervals.flatMap(([s, e]) => [s, e]))).sort((a, b) => a - b);
+        for (let k = 0; k < pts.length - 1; k++) {
+            const segS = pts[k], segE = pts[k + 1];
+            if (segE - segS < 0.15) continue;
+            const mid = (segS + segE) / 2;
+            const touching = intervals.filter(([s, e]) => s - 0.05 <= mid && mid <= e + 0.05).map(x => x[2]);
+            if (!touching.length) continue;
+            const isExterior = (new Set(touching).size === 1);
+
+            const doorsOnSeg = selectedDoors.filter(d => {
+                if (d.orientation !== orient) return false;
+                const dFixed = orient === "horizontal" ? d.z : d.x;
+                const dAlong = orient === "horizontal" ? d.x : d.z;
+                return Math.abs(dFixed - fc) <= 0.35 && (segS + 0.2 <= dAlong && dAlong <= segE - 0.2);
+            });
+
+            if (isExterior && (segE - segS) >= 2.2 && !doorsOnSeg.length) {
+                exteriorCandidates.push({
+                    orientation: orient,
+                    fc: fc,
+                    segS: segS,
+                    segE: segE,
+                    roomIdx: touching[0]
+                });
+            }
+        }
+    });
+
+    // Pass 2: Select windows for perimeter rooms
+    const roomsWithWindow = new Set();
+    const selectedWindows = [];
+    for (const cand of exteriorCandidates) {
+        const rIdx = cand.roomIdx;
+        const count = selectedWindows.filter(w => w.cand.roomIdx === rIdx).length;
+        if (count >= 1 && selectedWindows.length >= normRooms.length) {
+            continue;
+        }
+        const midAlong = (cand.segS + cand.segE) / 2;
+        selectedWindows.push({
+            cand: cand,
+            mid: midAlong,
+            orientation: cand.orientation,
+            fc: cand.fc,
+            width: 1.5,
+            height: 1.2
+        });
+        roomsWithWindow.add(rIdx);
+    }
+
+    // Pass 3: Re-build walls carving both door openings and window apertures (sills + lintels)
+    const walls = [];
     let wallId = 1;
 
     groupedLines.forEach(([orient, fc, intervals]) => {
@@ -261,54 +313,93 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2) {
             const mid = (segS + segE) / 2;
             const touching = intervals.filter(([s, e]) => s - 0.05 <= mid && mid <= e + 0.05).map(x => x[2]);
             if (!touching.length) continue;
-            const isExterior = new Set(touching).size === 1;
+            const isExterior = (new Set(touching).size === 1);
 
-            const doorsOnSeg = selectedDoors
-                .filter(d => d.orientation === orient && Math.abs((orient === "horizontal" ? d.z : d.x) - fc) <= 0.35)
-                .map(d => orient === "horizontal" ? d.x : d.z)
-                .filter(da => segS + 0.2 <= da && da <= segE - 0.2)
-                .sort((a, b) => a - b);
+            const doorsOnSeg = [];
+            for (const d of selectedDoors) {
+                if (d.orientation === orient) {
+                    const dFixed = orient === "horizontal" ? d.z : d.x;
+                    const dAlong = orient === "horizontal" ? d.x : d.z;
+                    if (Math.abs(dFixed - fc) <= 0.35 && (segS + 0.2 <= dAlong && dAlong <= segE - 0.2)) {
+                        doorsOnSeg.push(dAlong);
+                    }
+                }
+            }
 
-            const makeWall = (c1, c2, baseY, h) => {
-                const s3 = orient === "horizontal" ? [c1 - ox, 0, fc - oz] : [fc - ox, 0, c1 - oz];
-                const e3 = orient === "horizontal" ? [c2 - ox, 0, fc - oz] : [fc - ox, 0, c2 - oz];
+            const winsOnSeg = [];
+            for (const w of selectedWindows) {
+                if (w.orientation === orient && Math.abs(w.fc - fc) <= 0.25) {
+                    if (segS + 0.6 <= w.mid && w.mid <= segE - 0.6) {
+                        winsOnSeg.push(w.mid);
+                    }
+                }
+            }
+
+            const addWallPiece = (c1, c2, baseY, h, isExt = isExterior, isLint = false) => {
+                if (c2 - c1 <= 0.05) return;
+                const s3 = orient === "horizontal" ? [Math.round((c1 - ox) * 100) / 100, baseY, Math.round((fc - oz) * 100) / 100] : [Math.round((fc - ox) * 100) / 100, baseY, Math.round((c1 - oz) * 100) / 100];
+                const e3 = orient === "horizontal" ? [Math.round((c2 - ox) * 100) / 100, baseY, Math.round((fc - oz) * 100) / 100] : [Math.round((fc - ox) * 100) / 100, baseY, Math.round((c2 - oz) * 100) / 100];
                 walls.push({
                     id: wallId++,
-                    start: s3.map(v => Math.round(v * 100) / 100),
-                    end: e3.map(v => Math.round(v * 100) / 100),
+                    start: s3,
+                    end: e3,
                     base_y: baseY,
                     thickness: wallThickness,
                     height: h,
-                    is_exterior: isExterior
+                    is_exterior: isExt,
+                    is_lintel: isLint
                 });
             };
 
-            if (!doorsOnSeg.length) {
-                makeWall(segS, segE, 0, wallHeight);
-                if (isExterior && segE - segS >= 2.2) {
-                    exteriorCandidates.push({ orientation: orient, fc, segS, segE, roomIdx: touching[0] });
+            if (!doorsOnSeg.length && !winsOnSeg.length) {
+                addWallPiece(segS, segE, 0.0, wallHeight);
+            } else if (doorsOnSeg.length) {
+                doorsOnSeg.sort((a, b) => a - b);
+                let curPos = segS;
+                const doorHalf = 0.52;
+                for (const dCenter of doorsOnSeg) {
+                    const dLeft = Math.max(curPos, dCenter - doorHalf);
+                    const dRight = Math.min(segE, dCenter + doorHalf);
+                    if (dLeft - curPos > 0.1) {
+                        addWallPiece(curPos, dLeft, 0.0, wallHeight);
+                    }
+                    // Door lintel header (y = 2.1 to 2.8)
+                    addWallPiece(dLeft, dRight, 2.1, Math.round((wallHeight - 2.1) * 100) / 100, isExterior, true);
+                    curPos = dRight;
                 }
-            } else {
-                let cur = segS;
-                for (const dc of doorsOnSeg) {
-                    const dl = Math.max(cur, dc - 0.52);
-                    const dr = Math.min(segE, dc + 0.52);
-                    if (dl - cur > 0.12) makeWall(cur, dl, 0, wallHeight);
-                    makeWall(dl, dr, 2.1, Math.round((wallHeight - 2.1) * 100) / 100);
-                    cur = dr;
+                if (segE - curPos > 0.1) {
+                    addWallPiece(curPos, segE, 0.0, wallHeight);
                 }
-                if (segE - cur > 0.12) makeWall(cur, segE, 0, wallHeight);
+            } else if (winsOnSeg.length) {
+                // Carve window opening: Sill below (y=0 to 1.0) & Lintel above (y=2.2 to 2.8)
+                winsOnSeg.sort((a, b) => a - b);
+                let curPos = segS;
+                const winHalf = 0.76;
+                for (const wCenter of winsOnSeg) {
+                    const wLeft = Math.max(curPos, wCenter - winHalf);
+                    const wRight = Math.min(segE, wCenter + winHalf);
+                    if (wLeft - curPos > 0.1) {
+                        addWallPiece(curPos, wLeft, 0.0, wallHeight);
+                    }
+                    // 1. Lower sill wall below window (y = 0.0 to 1.0)
+                    addWallPiece(wLeft, wRight, 0.0, 1.0);
+                    // 2. Upper header lintel wall above window (y = 2.2 to 2.8)
+                    addWallPiece(wLeft, wRight, 2.2, Math.round((wallHeight - 2.2) * 100) / 100, isExterior, true);
+                    curPos = wRight;
+                }
+                if (segE - curPos > 0.1) {
+                    addWallPiece(curPos, segE, 0.0, wallHeight);
+                }
             }
         }
     });
 
-    const processedWindows = exteriorCandidates.slice(0, normRooms.length + 1).map(cand => {
-        const mid = (cand.segS + cand.segE) / 2;
-        const wx = cand.orientation === "horizontal" ? mid - ox : cand.fc - ox;
-        const wz = cand.orientation === "horizontal" ? cand.fc - oz : mid - oz;
+    const processedWindows = selectedWindows.map(w => {
+        const wx = w.orientation === "horizontal" ? w.mid - ox : w.fc - ox;
+        const wz = w.orientation === "horizontal" ? w.fc - oz : w.mid - oz;
         return {
             pos: [Math.round(wx * 100) / 100, 1.0, Math.round(wz * 100) / 100],
-            orientation: cand.orientation,
+            orientation: w.orientation,
             width: 1.5,
             height: 1.2
         };
