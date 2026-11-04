@@ -1754,4 +1754,8 @@ window.addEventListener("DOMContentLoaded", () => {
     };
 
     build3DScene(initialScene);
+
+    if (window.location.search.includes("view=studio") || window.location.hash === "#studio") {
+        switchView("studio");
+    }
 });

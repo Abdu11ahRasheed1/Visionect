@@ -23,6 +23,9 @@ checkpoints/
 *.tar
 *.tar.gz
 *.zip
+# Allow tracked production LoRA weights:
+!weights/
+!weights/*
 
 # 3. Python Virtual Environment & Caches
 venv/

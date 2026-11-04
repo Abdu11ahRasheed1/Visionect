@@ -10,7 +10,7 @@
 
 **Transform natural-language room specifications and curated architectural presets into watertight 3D floorplans with real-time WASD walkthroughs, physical door/window cutouts, interactive furniture staging, and synchronized 2D CAD blueprints.**
 
-[Key Features](#-key-features) • [2D Floorplan Gallery](#-2d-floorplan-blueprints--cad-layouts) • [Output Results & Benchmarks](#-output-results--evaluation-metrics) • [System Architecture](#-system-architecture) • [Quick Start](#-quick-start)
+[Key Features](#-key-features) • [Fine-Tuned Weights](#-fine-tuned-model-weights-diffusion-lora) • [2D Blueprints](#-2d-floorplan-blueprints--cad-layouts) • [Benchmarks](#-output-results--evaluation-metrics) • [Netlify Guide](#️-netlify-deployment--secure-api-key-setup) • [Quick Start](#-quick-start)
 
 </div>
 
@@ -107,6 +107,8 @@ Visionect/
 ├── netlify/
 │   └── functions/
 │       └── generate.js         # Serverless API Function for Cloud Deployment
+├── weights/                    # Fine-Tuned Model Weights (Tracked LoRA Checkpoint)
+│   └── visionect_blueprint_lora_final.pt # CubiCasa5K Fine-Tuned SD v1.5 LoRA (12.2 MB)
 ├── docs/
 │   └── images/                 # 2D CAD Floorplan SVGs, LoRA Outputs & Evaluation Visuals
 ├── server.py                   # Local Python Backend Server & Topological CAD Compiler
@@ -147,6 +149,55 @@ No external Python packages are required to run the web studio server:
 python server.py
 ```
 Open **`http://localhost:8000`** in your browser.
+
+---
+
+## 🧠 Fine-Tuned Model Weights (Diffusion LoRA)
+
+Visionect includes pre-trained and fine-tuned LoRA weights specifically optimized for architectural 2D blueprint generation on the **CubiCasa5K** dataset.
+
+[![Download Weights](https://img.shields.io/badge/Model_Weights-visionect__blueprint__lora__final.pt_(12.2_MB)-ff5a1f?style=for-the-badge&logo=pytorch&logoColor=white)](weights/visionect_blueprint_lora_final.pt)
+
+- **Weight File:** [`weights/visionect_blueprint_lora_final.pt`](file:///c:/Users/Abdullah/Desktop/Work/visonect/weights/visionect_blueprint_lora_final.pt) (~`12.2 MB`)
+- **Base Architecture:** Stable Diffusion v1.5 (`runwayml/stable-diffusion-v1-5`)
+- **Training Epochs:** 5 epochs over CubiCasa5K floorplan SVGs (`train_blueprint_lora.py`)
+- **Target Matrices:** Cross-attention linear projections (`to_k`, `to_q`, `to_v`, `to_out.0`)
+- **LoRA Rank ($r$):** 8, **Alpha ($\alpha$):** 32
+
+### Running Inference with Fine-Tuned Weights:
+```bash
+python generate_blueprint.py \
+  --prompt "A modern 2-bedroom architectural blueprint with kitchen and central bath" \
+  --lora_weights weights/visionect_blueprint_lora_final.pt \
+  --output output_samples/custom_blueprint.png
+```
+
+---
+
+## ☁️ Netlify Deployment & Secure API Key Setup
+
+Visionect is optimized for zero-configuration deployment on **Netlify** with serverless functions.
+
+### How to use your Groq API Key securely on Netlify (100% Private, Zero GitHub Exposure):
+To keep your API key secure without exposing it in your public GitHub repository:
+
+1. **Deploy to Netlify:** Connect your GitHub repo (`Abdu11ahRasheed1/Visionect`) to Netlify.
+2. **Open Netlify Site Configuration:**
+   - In your Netlify dashboard, navigate to **Site configuration** (or **Site settings**).
+   - In the sidebar, select **Environment variables**.
+3. **Add the Key:**
+   - Click **Add a variable** -> **Add a single variable**.
+   - **Key:** `GROQ_API_KEY`
+   - **Value:** `<your_actual_groq_api_key>`
+   - **Scopes:** Select all scopes (Production, Deploy previews, Branch deploys).
+   - Click **Create variable**.
+4. **Trigger a Deploy:**
+   - Go to **Deploys** -> click **Trigger deploy** -> **Clear cache and deploy site**.
+
+> [!TIP]
+> **Why this is completely secure:** Netlify stores environment variables encrypted on their infrastructure and injects them only into the secure serverless runtime (`process.env.GROQ_API_KEY`). Your public GitHub repository contains **zero secrets**, and client-side browsers only speak to `/.netlify/functions/generate` without ever seeing the key.
+> 
+> Furthermore, Visionect's Netlify function contains an **automatic procedural CAD recovery engine** — so even if the key is missing or rate-limited, the application seamlessly synthesizes watertight 3D floorplans!
 
 ---
 
