@@ -56,6 +56,7 @@ Alongside the deterministic topological compiler, Visionect includes a **Stable 
 
 ### 3D Extruded Spatial Model Output
 ![3D Extruded Model](docs/images/studio_3d_extrusion.png)
+*Multi-story 3D architectural extrusion featuring a hipped hut roof in X-Ray transparent inspection mode, ground-floor main entrance doorway, physical 3D inter-floor staircase (`y = 0.0m` to `y = 2.8m`), and a prompt-driven 2nd-floor open terrace balcony with glass & steel balustrade railings.*
 
 ### Quantitative Benchmark (`evaluate_f1.py`)
 We evaluate both the **CubiCasa5K LoRA Vectorizer** (`vectorize_floorplan.py`) and the **Visionect Topological CAD Engine** (`server.py`) across wall precision, recall, F1 score, doorway connectivity, and topological validity:
@@ -76,10 +77,14 @@ Visionect enforces strict architectural feasibility constraints prior to 3D extr
 
 ## ✨ Key Features
 
+- **🏠 Multi-Story 3D House Architecture & Hipped Hut Roof:** Full 3D residential structure featuring a procedural hipped hut roof with structural hip rafters, ridge beam, and dynamic view modes (*Solid Shingle*, *X-Ray Transparent*, or *Hidden*) that automatically adapt when inspecting individual floors or walking through rooms.
+- **🪜 Custom 2nd Floor Generation & 3D Connecting Staircase:** Add and customize a second story (`Level 2`) via natural-language prompts. Automatically carves a structural stairwell opening and builds a physical 14-step 3D staircase with dual handrails connecting Floor 1 ($y = 0.0\text{m}$) to Floor 2 ($y = 2.8\text{m}$).
+- **🌅 Dynamic Open Balcony with Glass & Steel Balustrades:** Prompt-driven outdoor terraces and balconies on the 2nd floor are extruded as open-air cantilevers/wings with tempered glass panels, steel top rails, vertical balusters, and direct terrace access doors.
+- **🚪 Ground-Floor Main Entrance Doorway & Portico:** Exterior entry wall features a dedicated grand main entrance door (`1.2m × 2.15m`) with frosted glass lite, brass hardware, exterior porch step, welcome mat, and overhead architectural canopy.
 - **🧱 Watertight 3D Wall Extrusion with Physical Cutouts:** Exterior and interior walls carve physical window sills ($y = 0.0\text{m}\text{–}1.0\text{m}$) and lintel headers ($y = 2.2\text{m}\text{–}2.8\text{m}$) with `MeshPhysicalMaterial` transmission glazing (`0.92` transmission).
 - **🚶 First-Person WASD Walkthrough & Interactive Door Portals:** Explore any generated layout at eye level ($y = 1.65\text{m}$) using `W` `A` `S` `D` and 360° mouse look. Click any door in 3D space to animate its 90° hinge swing and smoothly transition into the connected room.
-- **🗺️ Live Synchronized 2D Named Minimap:** Always-visible 2D CAD overlay displaying named rooms, dimensions, door swings, window spans, and a real-time player view cone. Click any room on the 2D map to teleport inside.
-- **🛋️ Real-Time 3D Furniture Drag & Drop:** Spawn and reposition Modern Sofas, King Beds, Coffee Tables, Dining Sets, Kitchen Islands, Bathtubs, Indoor Plants, and Floor Lamps with ground-plane raycasting.
+- **🗺️ Live Synchronized 2D Named Minimap:** Always-visible 2D CAD overlay with Level 1 / Level 2 floor tabs displaying named rooms, dimensions, main entrance indicator, stairwell footprint, door swings, window spans, and a real-time player view cone.
+- **🛋️ Real-Time 3D Furniture Drag & Drop:** Spawn and reposition Modern Sofas, King Beds, Coffee Tables, Dining Sets, Kitchen Islands, Bathtubs, Indoor Plants, and Floor Lamps across either floor with ground-plane raycasting.
 - **🪵 Dynamic Procedural Surface Materials:** Switch floors between *Hardwood Oak*, *Walnut Parquet*, *Ceramic Tile*, *Polished Concrete*, and *Carrara Marble*, and customize interior wall colors live.
 - **⚡ Dual-Track Project Hub:** Choose from 5 curated architectural templates (1-Bed Studio to 4-Bed Estate & Sky Penthouse) or build a custom specification using the interactive Parametric CAD Configurator.
 

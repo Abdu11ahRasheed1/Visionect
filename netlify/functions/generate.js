@@ -48,13 +48,13 @@ function validatePrompt(p) {
 
 function generateProceduralFallback(promptText, floorIndex = 0) {
     const p = promptText.toLowerCase();
-    const hasBalcony = ["balcony", "terrace", "deck", "patio", "veranda"].some(b => p.includes(b));
-    const hasStudy = ["study", "office", "work", "library"].some(s => p.includes(s));
+    const hasBalcony = ["balcony", "terrace", "deck", "patio", "veranda", "railing", "outdoor", "porch"].some(b => p.includes(b));
+    const hasStudy = ["study", "office", "work", "library", "den"].some(s => p.includes(s));
 
     let beds = 2;
     const bedM = p.match(/(\d+)\s*(?:bed|bedroom|bhk)/);
     if (bedM) beds = Math.min(Math.max(parseInt(bedM[1], 10), 1), 6);
-    else if (p.includes("studio") || p.includes("one bed") || p.includes("1 bed")) beds = 1;
+    else if (p.includes("studio") || p.includes("one bed") || p.includes("1 bed") || p.includes("master")) beds = 1;
     else if (p.includes("three bed") || p.includes("3 bed")) beds = 3;
     else if (p.includes("four bed") || p.includes("4 bed")) beds = 4;
     else if (floorIndex === 1) beds = (hasBalcony || hasStudy) ? 1 : 2;
@@ -72,61 +72,86 @@ function generateProceduralFallback(promptText, floorIndex = 0) {
     const rooms = [];
 
     if (floorIndex === 1) {
-        // SECOND FLOOR ARCHITECTURE (Master Suite + Open Balcony + Study + Staircase Hallway)
+        // SECOND FLOOR ARCHITECTURE — DYNAMICALLY GENERATED FROM USER PROMPT
         const f2Width = 16.0;
-        const masterW = 6.5;
-        rooms.push({
-            id: "f2_master", name: "Master Suite", type: "bedroom",
-            x: 0.0, y: 0.0, w: masterW, h: 6.0, color: "#bfdbfe"
-        });
+        const f2Depth = 13.0;
+        const balcW = hasBalcony ? 4.5 : 0.0;
+        const indoorW = Math.round((f2Width - balcW) * 10) / 10;
 
-        let curX = masterW;
-        if (hasBalcony || true) {
-            const balconyW = 5.0;
-            const balcName = (p.includes("sunset") || p.includes("panoramic")) ? "Panoramic Sunset Balcony" : "Open Balcony";
-            rooms.push({
-                id: "f2_balcony", name: balcName, type: "balcony", is_outdoor: true,
-                x: curX, y: 0.0, w: balconyW, h: 6.0, color: "#6ee7b7"
-            });
-            curX += balconyW;
-        }
-
-        if (hasStudy || curX < f2Width) {
-            const studyW = Math.round((f2Width - curX) * 10) / 10;
-            rooms.push({
-                id: "f2_study", name: "Private Study & Library", type: "office",
-                x: curX, y: 0.0, w: studyW, h: 6.0, color: "#fed7aa"
-            });
-        }
-
-        let bX = 0.0;
-        const stairRoomW = 4.5;
+        // Top row (y = 0 to 6.5): Staircase Hallway + Master Suite (+ Study if requested)
+        const topY = 0.0;
+        const topH = 6.5;
+        const stairW = Math.round(indoorW * 0.38 * 10) / 10;
         rooms.push({
             id: "f2_landing", name: "Staircase Hallway", type: "living",
-            x: bX, y: 6.0, w: stairRoomW, h: 6.0, color: "#e2e8f0"
+            x: 0.0, y: topY, w: stairW, h: topH, color: "#e2e8f0"
         });
-        bX += stairRoomW;
+        let curX = stairW;
 
-        const bathW = 4.5;
-        rooms.push({
-            id: "f2_bath", name: "Ensuite Bathroom", type: "bathroom",
-            x: bX, y: 6.0, w: bathW, h: 6.0, color: "#f1f5f9"
-        });
-        bX += bathW;
-
-        if (beds > 1 || bX < f2Width) {
-            const bed2W = Math.round((f2Width - bX) * 10) / 10;
+        if (hasStudy) {
+            const masterW = Math.round((indoorW - curX) * 0.55 * 10) / 10;
             rooms.push({
-                id: "f2_bed2", name: "Guest Bedroom Suite", type: "bedroom",
-                x: bX, y: 6.0, w: bed2W, h: 6.0, color: "#dbeafe"
+                id: "f2_master", name: "Master Suite", type: "bedroom",
+                x: curX, y: topY, w: masterW, h: topH, color: "#bfdbfe"
+            });
+            curX = Math.round((curX + masterW) * 10) / 10;
+            const studyW = Math.round((indoorW - curX) * 10) / 10;
+            rooms.push({
+                id: "f2_study", name: "Private Study & Library", type: "office",
+                x: curX, y: topY, w: studyW, h: topH, color: "#fed7aa"
+            });
+        } else {
+            const masterW = Math.round((indoorW - curX) * 10) / 10;
+            rooms.push({
+                id: "f2_master", name: "Master Suite", type: "bedroom",
+                x: curX, y: topY, w: masterW, h: topH, color: "#bfdbfe"
+            });
+        }
+
+        // Bottom row (y = 6.5 to 13.0): Bathrooms + Additional Bedrooms / Lounge
+        const botY = 6.5;
+        const botH = 6.5;
+        const extraBeds = Math.max(beds - 1, 0);
+        const botItems = [];
+        for (let ba = 0; ba < baths; ba++) {
+            const baName = ba === 0 ? "Ensuite Bathroom" : `Upper Bathroom ${ba + 1}`;
+            botItems.push({ type: "bathroom", id: `f2_bath_${ba + 1}`, name: baName, color: "#f1f5f9" });
+        }
+        for (let eb = 0; eb < extraBeds; eb++) {
+            botItems.push({ type: "bedroom", id: `f2_bed_${eb + 2}`, name: `Bedroom ${eb + 2}`, color: "#dbeafe" });
+        }
+        if (kitchens > 0) {
+            botItems.push({ type: "kitchen", id: "f2_kitchen", name: "Upper Kitchenette", color: "#cbd5e1" });
+        }
+        if (botItems.length === 1) {
+            botItems.push({ type: "living", id: "f2_lounge", name: "Upper Family Lounge", color: "#e2e8f0" });
+        }
+
+        let bx = 0.0;
+        const itemW = Math.round((indoorW / botItems.length) * 10) / 10;
+        botItems.forEach((item, idxB) => {
+            const wVal = idxB === botItems.length - 1 ? Math.round((indoorW - bx) * 10) / 10 : itemW;
+            rooms.push({
+                id: item.id, name: item.name, type: item.type,
+                x: Math.round(bx * 10) / 10, y: botY, w: wVal, h: botH, color: item.color
+            });
+            bx += wVal;
+        });
+
+        // Open Balcony along East terrace wing (3 exterior sides with railings, open to sky)
+        if (hasBalcony) {
+            const balcName = (p.includes("sunset") || p.includes("panoramic")) ? "Panoramic Sunset Balcony" : (p.includes("terrace") ? "Rooftop Sky Terrace" : "Open Balcony");
+            rooms.push({
+                id: "f2_balcony", name: balcName, type: "balcony", is_outdoor: true,
+                x: indoorW, y: 0.0, w: balcW, h: f2Depth, color: "#6ee7b7"
             });
         }
 
         return {
             name: `Architectural Plan Level 2 (${beds} Bed, ${baths} Bath)`,
-            enhanced_prompt: "Level 2 architectural layout featuring verified spatial circulation, structural wall extrusions, and outdoor terrace balcony.",
+            enhanced_prompt: "Level 2 architectural layout featuring verified spatial circulation, structural wall extrusions, and custom upper-level zoning.",
             engine: "Visionect Procedural CAD Engine",
-            dimensions: { width: f2Width, depth: 12.0 },
+            dimensions: { width: f2Width, depth: f2Depth },
             rooms: rooms,
             floor_index: floorIndex
         };
@@ -181,9 +206,51 @@ function generateProceduralFallback(promptText, floorIndex = 0) {
     }
 }
 
-function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, baseElevation = 0.0, floorIndex = 0) {
+function retileRoomsIntoRect(roomsList, rectW, rectD) {
+    const n = roomsList.length;
+    if (n === 0) return;
+    if (n === 1) {
+        roomsList[0].x = 0.0;
+        roomsList[0].y = 0.0;
+        roomsList[0].w = Math.round(rectW * 100) / 100;
+        roomsList[0].h = Math.round(rectD * 100) / 100;
+        return;
+    }
+
+    const topCount = Math.floor((n + 1) / 2);
+    const topRooms = roomsList.slice(0, topCount);
+    const botRooms = roomsList.slice(topCount);
+
+    const h1 = Math.round(rectD * 0.52 * 100) / 100;
+    const h2 = Math.round((rectD - h1) * 100) / 100;
+
+    [[topRooms, 0.0, h1], [botRooms, h1, h2]].forEach(([rowRooms, yVal, hVal]) => {
+        if (!rowRooms.length) return;
+        const sumW = rowRooms.reduce((acc, r) => acc + Math.max(parseFloat(r.w || 4.0), 3.0), 0);
+        let curX = 0.0;
+        rowRooms.forEach((r, idxR) => {
+            let wVal;
+            if (idxR === rowRooms.length - 1) {
+                wVal = Math.round((rectW - curX) * 100) / 100;
+            } else {
+                const origW = Math.max(parseFloat(r.w || 4.0), 3.0);
+                wVal = Math.round(rectW * (origW / sumW) * 100) / 100;
+            }
+            r.x = Math.round(curX * 100) / 100;
+            r.y = Math.round(yVal * 100) / 100;
+            r.w = Math.max(wVal, 2.5);
+            r.h = Math.round(hVal * 100) / 100;
+            curX = Math.round((curX + r.w) * 100) / 100;
+        });
+    });
+}
+
+function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, baseElevation = 0.0, floorIndex = 0, targetWidth = null, targetDepth = null, promptText = "") {
     const rawRooms = layout.rooms || [];
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    const pLower = (promptText || "").toLowerCase();
+    const userWantsBalcony = pLower ? ["balcony", "terrace", "deck", "patio", "veranda", "railing", "outdoor", "porch"].some(b => pLower.includes(b)) : null;
 
     const normRooms = rawRooms.map((rm, idx) => {
         const rx = parseFloat(rm.x || 0);
@@ -194,12 +261,21 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, b
         minY = Math.min(minY, ry);
         maxX = Math.max(maxX, rx + rw);
         maxY = Math.max(maxY, ry + rh);
-        const isOutdoor = Boolean(rm.is_outdoor) || ["balcony", "terrace", "deck", "patio"].includes((rm.type || "").toLowerCase());
+        let rmType = (rm.type || "generic").toLowerCase();
+        const rmName = rm.name || `Room ${idx + 1}`;
+        const rmNameLower = rmName.toLowerCase();
+        let isOutdoor = Boolean(rm.is_outdoor) || ["balcony", "terrace", "deck", "patio", "veranda", "porch", "outdoor"].some(k => rmType.includes(k) || rmNameLower.includes(k));
+        if (userWantsBalcony === false && floorIndex === 1) {
+            isOutdoor = false;
+        }
+        if (isOutdoor) {
+            rmType = "balcony";
+        }
         return {
             idx,
             id: String(rm.id || `r${idx + 1}`),
-            name: rm.name || `Room ${idx + 1}`,
-            type: (rm.type || "generic").toLowerCase(),
+            name: rmName,
+            type: rmType,
             is_outdoor: isOutdoor,
             floor_index: floorIndex,
             elevation: baseElevation,
@@ -207,17 +283,71 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, b
             y: ry,
             w: rw,
             h: rh,
-            color: rm.color || "#cbd5e1"
+            color: rm.color || (isOutdoor ? "#6ee7b7" : "#cbd5e1")
         };
     });
+
+    if (floorIndex === 1 && userWantsBalcony === true && !normRooms.some(r => r.is_outdoor)) {
+        const balcName = (pLower.includes("sunset") || pLower.includes("panoramic")) ? "Panoramic Sunset Balcony" : "Open Balcony";
+        normRooms.push({
+            idx: normRooms.length,
+            id: "f2_balcony",
+            name: balcName,
+            type: "balcony",
+            is_outdoor: true,
+            floor_index: floorIndex,
+            elevation: baseElevation,
+            x: maxX,
+            y: minY,
+            w: 4.5,
+            h: Math.max(maxY - minY, 12.0),
+            color: "#6ee7b7"
+        });
+        maxX += 4.5;
+    }
 
     normRooms.forEach(rm => {
         rm.x = Math.round((rm.x - minX) * 100) / 100;
         rm.y = Math.round((rm.y - minY) * 100) / 100;
     });
 
-    const width = Math.round((maxX - minX) * 100) / 100;
-    const depth = Math.round((maxY - minY) * 100) / 100;
+    const rawW = Math.max(Math.round((maxX - minX) * 100) / 100, 8.0);
+    const rawD = Math.max(Math.round((maxY - minY) * 100) / 100, 8.0);
+
+    const finalW = (targetWidth && parseFloat(targetWidth) >= 8.0) ? Math.round(parseFloat(targetWidth) * 100) / 100 : rawW;
+    const finalD = (targetDepth && parseFloat(targetDepth) >= 8.0) ? Math.round(parseFloat(targetDepth) * 100) / 100 : rawD;
+
+    const outdoorRooms = normRooms.filter(r => r.is_outdoor);
+    const indoorRooms = normRooms.filter(r => !r.is_outdoor);
+
+    if (floorIndex === 1 && outdoorRooms.length > 0 && indoorRooms.length > 0) {
+        const balcW = Math.round(Math.max(Math.min(finalW * 0.28, 5.0), 3.8) * 100) / 100;
+        const indoorW = Math.round((finalW - balcW) * 100) / 100;
+        retileRoomsIntoRect(indoorRooms, indoorW, finalD);
+        const bH = Math.round((finalD / outdoorRooms.length) * 100) / 100;
+        outdoorRooms.forEach((orm, idxO) => {
+            orm.x = indoorW;
+            orm.y = Math.round(idxO * bH * 100) / 100;
+            orm.w = balcW;
+            orm.h = idxO === outdoorRooms.length - 1 ? Math.round((finalD - orm.y) * 100) / 100 : bH;
+        });
+    } else if (Math.abs(finalW - rawW) > 0.1 || Math.abs(finalD - rawD) > 0.1) {
+        const scaleX = finalW / rawW;
+        const scaleY = finalD / rawD;
+        normRooms.forEach(rm => {
+            rm.x = Math.round(rm.x * scaleX * 100) / 100;
+            rm.y = Math.round(rm.y * scaleY * 100) / 100;
+            rm.w = Math.round(rm.w * scaleX * 100) / 100;
+            rm.h = Math.round(rm.h * scaleY * 100) / 100;
+        });
+    }
+
+    normRooms.forEach((rm, idxN) => {
+        rm.idx = idxN;
+    });
+
+    const width = finalW;
+    const depth = finalD;
     const ox = width / 2.0;
     const oz = depth / 2.0;
 
@@ -364,11 +494,77 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, b
         }
     });
 
-    // Pass 2: Select windows for perimeter rooms
+    // Pass 2: Main Entrance Door (Ground Floor) & Exterior Windows for perimeter rooms
     const roomsWithWindow = new Set();
     const selectedWindows = [];
+
+    let mainEntranceCand = null;
+    if (floorIndex === 0 && exteriorCandidates.length > 0) {
+        const livingCands = exteriorCandidates.filter(c => {
+            const rm = normRooms[c.roomIdx];
+            const t = (rm.type || "").toLowerCase();
+            const n = (rm.name || "").toLowerCase();
+            return ["living", "foyer", "entry", "hall", "dining", "lounge"].some(k => t.includes(k) || n.includes(k));
+        });
+        const pool = livingCands.length > 0 ? livingCands : exteriorCandidates;
+        const horizPool = pool.filter(c => c.orientation === "horizontal");
+        const bestPool = horizPool.length > 0 ? horizPool : pool;
+        mainEntranceCand = bestPool.reduce((best, cur) => ((cur.segE - cur.segS) > (best.segE - best.segS) ? cur : best), bestPool[0]);
+    }
+
     for (const cand of exteriorCandidates) {
         const rIdx = cand.roomIdx;
+        const segLen = cand.segE - cand.segS;
+
+        if (cand === mainEntranceCand) {
+            let doorAlong;
+            if (segLen >= 5.2) {
+                doorAlong = Math.round((cand.segS + segLen * 0.72) * 100) / 100;
+                const winAlong = Math.round((cand.segS + segLen * 0.32) * 100) / 100;
+                selectedWindows.push({
+                    cand: cand,
+                    mid: winAlong,
+                    orientation: cand.orientation,
+                    fc: cand.fc,
+                    width: 1.5,
+                    height: 1.2
+                });
+                roomsWithWindow.add(rIdx);
+            } else {
+                doorAlong = Math.round(((cand.segS + cand.segE) / 2) * 100) / 100;
+            }
+
+            const dX = cand.orientation === "horizontal" ? doorAlong : cand.fc;
+            const dZ = cand.orientation === "horizontal" ? cand.fc : doorAlong;
+            selectedDoors.push({
+                r1: rIdx,
+                r2: rIdx,
+                orientation: cand.orientation,
+                x: dX,
+                z: dZ,
+                width: 1.2,
+                is_main_entrance: true
+            });
+            const entryRm = normRooms[rIdx];
+            const wx = Math.round((dX - ox) * 100) / 100;
+            const wz = Math.round((dZ - oz) * 100) / 100;
+            const extX = cand.orientation === "horizontal" ? wx : Math.round((wx < 0 ? wx - 2.5 : wx + 2.5) * 100) / 100;
+            const extZ = cand.orientation === "horizontal" ? Math.round((wz < 0 ? wz - 2.5 : wz + 2.5) * 100) / 100 : wz;
+            processedDoors.push({
+                id: "main_entrance_door",
+                name: "Main Entrance",
+                is_main_entrance: true,
+                pos: [wx, baseElevation, wz],
+                orientation: cand.orientation,
+                width: 1.2,
+                height: 2.15,
+                floor_index: floorIndex,
+                roomA: { id: "exterior_porch", name: "Front Porch (Exterior)", center: [extX, baseElevation, extZ] },
+                roomB: { id: entryRm.id, name: entryRm.name, center: entryRm.center3d }
+            });
+            continue;
+        }
+
         const count = selectedWindows.filter(w => w.cand.roomIdx === rIdx).length;
         if (count >= 1 && selectedWindows.length >= normRooms.length) {
             continue;
@@ -425,63 +621,47 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, b
                 continue;
             }
 
-            const doorsOnSeg = [];
+            const openings = [];
             for (const d of selectedDoors) {
                 if (d.orientation === orient) {
                     const dFixed = orient === "horizontal" ? d.z : d.x;
                     const dAlong = orient === "horizontal" ? d.x : d.z;
+                    const dHalf = ((d.width || 1.0) / 2) + 0.02;
                     if (Math.abs(dFixed - fc) <= 0.35 && (segS + 0.2 <= dAlong && dAlong <= segE - 0.2)) {
-                        doorsOnSeg.push(dAlong);
+                        openings.push({ center: dAlong, half: dHalf, kind: "door" });
                     }
                 }
             }
 
-            const winsOnSeg = [];
             for (const w of selectedWindows) {
                 if (w.orientation === orient && Math.abs(w.fc - fc) <= 0.25) {
                     if (segS + 0.6 <= w.mid && w.mid <= segE - 0.6) {
-                        winsOnSeg.push(w.mid);
+                        openings.push({ center: w.mid, half: 0.76, kind: "window" });
                     }
                 }
             }
 
-            if (!doorsOnSeg.length && !winsOnSeg.length) {
+            if (!openings.length) {
                 addWallPiece(segS, segE, 0.0, wallHeight);
-            } else if (doorsOnSeg.length) {
-                doorsOnSeg.sort((a, b) => a - b);
+            } else {
+                openings.sort((a, b) => a.center - b.center);
                 let curPos = segS;
-                const doorHalf = 0.52;
-                for (const dCenter of doorsOnSeg) {
-                    const dLeft = Math.max(curPos, dCenter - doorHalf);
-                    const dRight = Math.min(segE, dCenter + doorHalf);
-                    if (dLeft - curPos > 0.1) {
-                        addWallPiece(curPos, dLeft, 0.0, wallHeight);
+                for (const op of openings) {
+                    const oLeft = Math.max(curPos, op.center - op.half);
+                    const oRight = Math.min(segE, op.center + op.half);
+                    if (oRight <= oLeft + 0.08) continue;
+                    if (oLeft - curPos > 0.08) {
+                        addWallPiece(curPos, oLeft, 0.0, wallHeight);
                     }
-                    // Door lintel header (y = 2.1 to 2.8)
-                    addWallPiece(dLeft, dRight, 2.1, Math.round((wallHeight - 2.1) * 100) / 100, isExterior, true);
-                    curPos = dRight;
-                }
-                if (segE - curPos > 0.1) {
-                    addWallPiece(curPos, segE, 0.0, wallHeight);
-                }
-            } else if (winsOnSeg.length) {
-                // Carve window opening: Sill below (y=0 to 1.0) & Lintel above (y=2.2 to 2.8)
-                winsOnSeg.sort((a, b) => a - b);
-                let curPos = segS;
-                const winHalf = 0.76;
-                for (const wCenter of winsOnSeg) {
-                    const wLeft = Math.max(curPos, wCenter - winHalf);
-                    const wRight = Math.min(segE, wCenter + winHalf);
-                    if (wLeft - curPos > 0.1) {
-                        addWallPiece(curPos, wLeft, 0.0, wallHeight);
+                    if (op.kind === "door") {
+                        addWallPiece(oLeft, oRight, 2.1, Math.round((wallHeight - 2.1) * 100) / 100, isExterior, true);
+                    } else {
+                        addWallPiece(oLeft, oRight, 0.0, 1.0);
+                        addWallPiece(oLeft, oRight, 2.2, Math.round((wallHeight - 2.2) * 100) / 100, isExterior, true);
                     }
-                    // 1. Lower sill wall below window (y = 0.0 to 1.0)
-                    addWallPiece(wLeft, wRight, 0.0, 1.0);
-                    // 2. Upper header lintel wall above window (y = 2.2 to 2.8)
-                    addWallPiece(wLeft, wRight, 2.2, Math.round((wallHeight - 2.2) * 100) / 100, isExterior, true);
-                    curPos = wRight;
+                    curPos = oRight;
                 }
-                if (segE - curPos > 0.1) {
+                if (segE - curPos > 0.08) {
                     addWallPiece(curPos, segE, 0.0, wallHeight);
                 }
             }
@@ -500,28 +680,52 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, b
         };
     });
 
-    // Connecting Staircase metadata
+    // Connecting Staircase metadata (Positioned cleanly along West interior wall)
+    const stairX = Math.round((-ox + 0.9) * 100) / 100;
+    const stairZ1 = Math.round((-oz + 1.0) * 100) / 100;
+    const stairZ2 = Math.round((-oz + 4.2) * 100) / 100;
+    const cMinX = Math.round((-ox + 0.25) * 100) / 100;
+    const cMaxX = Math.round((-ox + 1.55) * 100) / 100;
+    const cMinZ = Math.round((-oz + 0.9) * 100) / 100;
+    const cMaxZ = Math.round((-oz + 4.3) * 100) / 100;
+
     const stairsMeta = {
         id: `stairs_f${floorIndex + 1}`,
-        start: [Math.round((-ox + 1.6) * 100) / 100, baseElevation, Math.round((-oz + 1.8) * 100) / 100],
-        end: [Math.round((-ox + 1.6) * 100) / 100, Math.round((baseElevation + wallHeight) * 100) / 100, Math.round((-oz + 5.4) * 100) / 100],
-        width: 1.2,
+        start: [stairX, baseElevation, stairZ1],
+        end: [stairX, Math.round((baseElevation + wallHeight) * 100) / 100, stairZ2],
+        width: 1.15,
         height: wallHeight,
         steps: 15,
+        num_steps: 15,
         orientation: "north_south",
         floor_index: floorIndex,
         cutout: {
-            center: [Math.round((-ox + 1.6) * 100) / 100, Math.round((baseElevation + wallHeight) * 100) / 100, Math.round((-oz + 3.6) * 100) / 100],
-            size: [1.4, 3.8]
+            min_x: cMinX,
+            max_x: cMaxX,
+            min_z: cMinZ,
+            max_z: cMaxZ,
+            center: [Math.round(((cMinX + cMaxX) / 2) * 100) / 100, Math.round((baseElevation + wallHeight) * 100) / 100, Math.round(((cMinZ + cMaxZ) / 2) * 100) / 100],
+            size: [Math.round((cMaxX - cMinX) * 100) / 100, Math.round((cMaxZ - cMinZ) * 100) / 100]
         }
     };
 
-    // Hipped Hut Roof metadata
+    // Hipped Hut Roof metadata (Covers indoor structure; leaves Floor 2 outdoor balcony open to sky)
+    const indoorMaxX = (floorIndex === 1 && outdoorRooms.length > 0 && indoorRooms.length > 0)
+        ? Math.max(...indoorRooms.map(r => r.x + r.w))
+        : width;
+    const roofBounds = [
+        Math.round(-ox * 100) / 100,
+        Math.round((indoorMaxX - ox) * 100) / 100,
+        Math.round(-oz * 100) / 100,
+        Math.round(oz * 100) / 100
+    ];
+
     const roofMeta = {
         type: "hipped_hut",
-        width: width,
+        width: Math.round(indoorMaxX * 100) / 100,
         depth: depth,
-        height: 2.3,
+        bounds: roofBounds,
+        height: 2.4,
         base_y: Math.round((baseElevation + wallHeight) * 100) / 100,
         overhang: 0.45,
         floor_index: floorIndex
@@ -533,6 +737,7 @@ function compileLayoutTo3DScene(layout, wallHeight = 2.8, wallThickness = 0.2, b
             enhanced_prompt: layout.enhanced_prompt || "Architecturally optimized space layout.",
             engine: layout.engine || "Visionect CAD Engine",
             world_size: { width, depth },
+            bounding_box: [Math.round(-ox * 100) / 100, Math.round(ox * 100) / 100, Math.round(-oz * 100) / 100, Math.round(oz * 100) / 100],
             floor_index: floorIndex,
             base_elevation: baseElevation,
             total_walls: walls.length,
@@ -573,6 +778,8 @@ exports.handler = async function(event, context) {
         const promptText = (body.prompt || "2 bedrooms, 1 bathroom, living room, open kitchen").trim();
         const floorIndex = parseInt(body.floor_index || 0, 10);
         const baseElevation = parseFloat(body.base_y !== undefined ? body.base_y : floorIndex * 2.8);
+        const targetWidth = body.target_width || null;
+        const targetDepth = body.target_depth || null;
 
         const validation = validatePrompt(promptText);
         if (!validation.isValid) {
@@ -589,7 +796,7 @@ exports.handler = async function(event, context) {
         // If GROQ_API_KEY is available in Netlify environment variables, synthesize with LLM
         if (apiKey) {
             const systemPrompt = `You are an expert AI Architectural CAD Engine (like Coohom / Planner5D).
-Given a user prompt describing an apartment or house, design a functional 2D floorplan layout on a metric grid (meters).
+Given a user prompt describing an apartment or house level, design a functional 2D floorplan layout on a metric grid (meters).
 
 You MUST:
 1. IMPROVE and ENHANCE the prompt into a professional architectural design specification ("enhanced_prompt").
@@ -610,10 +817,11 @@ Output ONLY valid JSON matching this schema:
 
 STRICT ARCHITECTURAL RULES:
 1. Every room MUST have non-zero positive dimensions (minimum w: 3.5, h: 3.5 meters).
-2. Strictly generate ALL rooms requested.
-3. Rooms MUST share walls in a contiguous block without floating gaps or overlaps.
-4. Allowed room types: 'bedroom', 'living', 'kitchen', 'bathroom', 'dining', 'balcony', 'office'.
-5. Return ONLY raw JSON without markdown formatting.`;
+2. Strictly generate ALL rooms requested (e.g., if user asks forbedrooms, bathrooms, study, or open balcony, include all of them!).
+3. If the user asks for a balcony, terrace, or deck, give that room "type": "balcony" and "is_outdoor": true. If the user does NOT ask for a balcony/terrace, do NOT include one.
+4. Rooms MUST share walls in a contiguous block without floating gaps or overlaps.
+5. Allowed room types: 'bedroom', 'living', 'kitchen', 'bathroom', 'dining', 'balcony', 'office'.
+6. Return ONLY raw JSON without markdown formatting.`;
 
             const modelsToTry = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"];
 
@@ -659,7 +867,7 @@ STRICT ARCHITECTURAL RULES:
             layout = generateProceduralFallback(promptText, floorIndex);
         }
 
-        const scene3d = compileLayoutTo3DScene(layout, 2.8, 0.2, baseElevation, floorIndex);
+        const scene3d = compileLayoutTo3DScene(layout, 2.8, 0.2, baseElevation, floorIndex, targetWidth, targetDepth, promptText);
 
         return {
             statusCode: 200,

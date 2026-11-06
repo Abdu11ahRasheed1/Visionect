@@ -241,22 +241,24 @@ function getProceduralFloorTexture(type) {
 function applyFloorTextureToAllRooms(type) {
     currentFloorType = type;
     const baseTex = getProceduralFloorTexture(type);
+    const outdoorTex = getProceduralFloorTexture("tile");
     const roughnessMap = { wood: 0.45, darkwood: 0.4, tile: 0.2, concrete: 0.65, marble: 0.15 };
 
     floorMeshes.forEach(mesh => {
         const rmSize = mesh.userData.roomSize || [6, 6];
-        const clonedTex = baseTex.clone();
+        const isOut = Boolean(mesh.userData.isOutdoor);
+        const clonedTex = (isOut ? outdoorTex : baseTex).clone();
         clonedTex.needsUpdate = true;
         clonedTex.repeat.set(Math.max(1, rmSize[0] / 2.5), Math.max(1, rmSize[1] / 2.5));
         mesh.material.map = clonedTex;
-        mesh.material.color.setHex(0xffffff);
-        mesh.material.roughness = roughnessMap[type] || 0.5;
+        mesh.material.color.setHex(isOut ? 0x94a3b8 : 0xffffff);
+        mesh.material.roughness = isOut ? 0.55 : (roughnessMap[type] || 0.5);
         mesh.material.needsUpdate = true;
     });
 }
 
 // Create 3D Floating Label Sprite for Room Name & Area
-function createRoomLabelSprite(rm) {
+function createRoomLabelSprite(rm, baseY = 0) {
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 140;
@@ -517,6 +519,25 @@ function buildStaircaseAssembly(stairsData) {
     return group;
 }
 
+// Helper to normalize stair cutout bounds from backend or fallback
+function resolveStairCutout(stairsData) {
+    if (stairsData && stairsData.cutout) {
+        const c = stairsData.cutout;
+        if (c.min_x !== undefined && c.max_x !== undefined && c.min_z !== undefined && c.max_z !== undefined) {
+            return c;
+        }
+        if (c.center && c.size) {
+            return {
+                min_x: c.center[0] - c.size[0] / 2,
+                max_x: c.center[0] + c.size[0] / 2,
+                min_z: c.center[2] - c.size[1] / 2,
+                max_z: c.center[2] + c.size[1] / 2
+            };
+        }
+    }
+    return { min_x: -7.75, max_x: -6.45, min_z: -5.6, max_z: -2.2 };
+}
+
 // Intermediate Floor Slab at y = 2.8m with Stair Cutout and Floor 2 Guardrails
 function buildIntermediateFloorSlab(floor2Data, stairsData) {
     if (!floor2Data) return null;
@@ -530,14 +551,12 @@ function buildIntermediateFloorSlab(floor2Data, stairsData) {
     group.userData.type = "slab";
 
     const slabMat = new THREE.MeshStandardMaterial({
-        color: 0x334155, // Architectural concrete slate ceiling
+        color: 0x334155, // Architectural concrete structural slab
         roughness: 0.6,
         metalness: 0.1
     });
 
-    const stairCutout = (stairsData && stairsData.cutout) ? stairsData.cutout : {
-        min_x: -1.8, max_x: 0.5, min_z: -1.5, max_z: 2.5
-    };
+    const stairCutout = resolveStairCutout(stairsData);
 
     const slabThickness = 0.18;
     const slabY = 2.8 - slabThickness / 2;
@@ -561,9 +580,9 @@ function buildIntermediateFloorSlab(floor2Data, stairsData) {
         }
     });
 
-    // Safety guardrails around the open stairwell edges on Floor 2
+    // Safety guardrails around the open interior stairwell edges on Floor 2 (East & North edges; South landing is open)
     const guardrailWalls = [
-        { start: [stairCutout.min_x, 2.8, stairCutout.min_z], end: [stairCutout.min_x, 2.8, stairCutout.max_z], is_railing: true, base_y: 2.8, height: 1.05 },
+        { start: [stairCutout.max_x, 2.8, stairCutout.min_z], end: [stairCutout.max_x, 2.8, stairCutout.max_z], is_railing: true, base_y: 2.8, height: 1.05 },
         { start: [stairCutout.min_x, 2.8, stairCutout.min_z], end: [stairCutout.max_x, 2.8, stairCutout.min_z], is_railing: true, base_y: 2.8, height: 1.05 }
     ];
     guardrailWalls.forEach(gw => {
@@ -577,12 +596,62 @@ function buildIntermediateFloorSlab(floor2Data, stairsData) {
     return group;
 }
 
-// Complete House Hut Type Roof Assembly (Pitched/Hipped with Terracotta/Slate & X-Ray Mode)
+// Procedural Architectural Terracotta Shingle Texture for Hut Roof
+let cachedRoofTileTexture = null;
+function getProceduralRoofTileTexture() {
+    if (cachedRoofTileTexture) return cachedRoofTileTexture;
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = "#8c2d12";
+    ctx.fillRect(0, 0, 512, 512);
+
+    const rows = 8;
+    const cols = 8;
+    const rowH = 512 / rows;
+    const colW = 512 / cols;
+
+    for (let r = 0; r < rows; r++) {
+        const y = r * rowH;
+        const xOffset = (r % 2) * (colW / 2);
+        for (let c = -1; c <= cols; c++) {
+            const x = c * colW + xOffset;
+            const grad = ctx.createLinearGradient(x, y, x + colW, y + rowH);
+            grad.addColorStop(0, "#b44118");
+            grad.addColorStop(0.6, "#9a3412");
+            grad.addColorStop(1, "#6b1f09");
+            ctx.fillStyle = grad;
+            ctx.fillRect(x + 2, y + 2, colW - 4, rowH - 4);
+
+            // Curved barrel tile highlight
+            ctx.strokeStyle = "rgba(255, 180, 140, 0.22)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + colW * 0.3, y + 4);
+            ctx.lineTo(x + colW * 0.3, y + rowH - 4);
+            ctx.stroke();
+        }
+        // Horizontal course shadow
+        ctx.fillStyle = "rgba(20, 8, 4, 0.38)";
+        ctx.fillRect(0, y + rowH - 5, 512, 5);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 3);
+    cachedRoofTileTexture = tex;
+    return tex;
+}
+
+// Complete House Hut Type Roof Assembly (Pitched/Hipped with Terracotta Shingles, Hip Rafters & Transparent View Mode)
 function buildRoofAssembly(roofData) {
     if (!roofData) return null;
     const baseY = roofData.base_y !== undefined ? roofData.base_y : 2.8;
-    const roofH = roofData.height || 2.4;
-    const overhang = roofData.overhang || 0.45;
+    const roofH = roofData.height || 2.5;
+    const overhang = roofData.overhang || 0.55;
     const bounds = roofData.bounds || [-8, 8, -6.5, 6.5];
 
     const x0 = bounds[0] - overhang;
@@ -600,16 +669,16 @@ function buildRoofAssembly(roofData) {
     group.userData.type = "roof";
 
     // Ridge endpoints along center X axis
-    const ridgeInset = Math.min(width * 0.25, depth * 0.5);
-    const rx0 = centerX - (width / 2 - ridgeInset);
-    const rx1 = centerX + (width / 2 - ridgeInset);
+    const ridgeInset = Math.min(width * 0.28, depth * 0.48);
+    const rx0 = centerX - Math.max(0.4, width / 2 - ridgeInset);
+    const rx1 = centerX + Math.max(0.4, width / 2 - ridgeInset);
     const rz = centerZ;
 
     const vertices = [];
     const normals = [];
     const uvs = [];
 
-    function addTri(pA, pB, pC) {
+    function addTriWithUV(pA, pB, pC, uvA, uvB, uvC) {
         vertices.push(...pA, ...pB, ...pC);
         const vA = new THREE.Vector3(...pA);
         const vB = new THREE.Vector3(...pB);
@@ -618,12 +687,12 @@ function buildRoofAssembly(roofData) {
         const ab = new THREE.Vector3().subVectors(vA, vB);
         const norm = cb.cross(ab).normalize();
         normals.push(norm.x, norm.y, norm.z, norm.x, norm.y, norm.z, norm.x, norm.y, norm.z);
-        uvs.push(0, 0, 1, 0, 0.5, 1);
+        uvs.push(...uvA, ...uvB, ...uvC);
     }
 
     function addQuad(pA, pB, pC, pD) {
-        addTri(pA, pB, pC);
-        addTri(pA, pC, pD);
+        addTriWithUV(pA, pB, pC, [0, 0], [1, 0], [0.85, 1]);
+        addTriWithUV(pA, pC, pD, [0, 0], [0.85, 1], [0.15, 1]);
     }
 
     const c0 = [x0, baseY, z0]; // NW
@@ -638,30 +707,32 @@ function buildRoofAssembly(roofData) {
     // South slope (c2, c3, r0, r1)
     addQuad(c2, c3, r0, r1);
     // West hip triangle (c3, c0, r0)
-    addTri(c3, c0, r0);
+    addTriWithUV(c3, c0, r0, [0, 0], [1, 0], [0.5, 1]);
     // East hip triangle (c1, c2, r1)
-    addTri(c1, c2, r1);
+    addTriWithUV(c1, c2, r1, [0, 0], [1, 0], [0.5, 1]);
 
     const roofGeo = new THREE.BufferGeometry();
     roofGeo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     roofGeo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
     roofGeo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
 
+    const roofTex = getProceduralRoofTileTexture();
     const roofSolidMat = new THREE.MeshStandardMaterial({
-        color: 0x9a3412, // Rich terracotta Spanish roof tile
-        roughness: 0.55,
-        metalness: 0.1,
+        map: roofTex,
+        color: 0xd97757,
+        roughness: 0.52,
+        metalness: 0.08,
         side: THREE.DoubleSide
     });
 
     const roofGlassMat = new THREE.MeshPhysicalMaterial({
         color: 0x38bdf8,
         transparent: true,
-        opacity: 0.28,
-        transmission: 0.82,
-        roughness: 0.1,
+        opacity: 0.22,
+        transmission: 0.85,
+        roughness: 0.08,
         metalness: 0.1,
-        ior: 1.5,
+        ior: 1.45,
         side: THREE.DoubleSide,
         depthWrite: false
     });
@@ -674,28 +745,44 @@ function buildRoofAssembly(roofData) {
     group.userData.solidMat = roofSolidMat;
     group.userData.glassMat = roofGlassMat;
 
-    // Architectural Perimeter Fascia Board
-    const fasciaMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+    // Architectural Perimeter Eaves Fascia & Soffit Trim
+    const fasciaMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.3 });
     const eaves = [
-        { len: width, pos: [centerX, baseY - 0.05, z0], rot: 0 },
-        { len: width, pos: [centerX, baseY - 0.05, z1], rot: 0 },
-        { len: depth, pos: [x0, baseY - 0.05, centerZ], rot: Math.PI / 2 },
-        { len: depth, pos: [x1, baseY - 0.05, centerZ], rot: Math.PI / 2 }
+        { len: width + 0.1, pos: [centerX, baseY - 0.04, z0], rot: 0 },
+        { len: width + 0.1, pos: [centerX, baseY - 0.04, z1], rot: 0 },
+        { len: depth + 0.1, pos: [x0, baseY - 0.04, centerZ], rot: Math.PI / 2 },
+        { len: depth + 0.1, pos: [x1, baseY - 0.04, centerZ], rot: Math.PI / 2 }
     ];
     eaves.forEach(e => {
-        const fMesh = new THREE.Mesh(new THREE.BoxGeometry(e.len, 0.12, 0.08), fasciaMat);
+        const fMesh = new THREE.Mesh(new THREE.BoxGeometry(e.len, 0.14, 0.09), fasciaMat);
         fMesh.position.set(...e.pos);
         fMesh.rotation.y = e.rot;
         group.add(fMesh);
     });
 
+    // 4 Structural Hip Rafter Beams (Connecting corners c0..c3 to ridge endpoints r0, r1)
+    const hipPairs = [
+        [c0, r0],
+        [c1, r1],
+        [c2, r1],
+        [c3, r0]
+    ];
+    hipPairs.forEach(([pStart, pEnd]) => {
+        const vStart = new THREE.Vector3(...pStart);
+        const vEnd = new THREE.Vector3(...pEnd);
+        const dist = vStart.distanceTo(vEnd);
+        const mid = new THREE.Vector3().addVectors(vStart, vEnd).multiplyScalar(0.5);
+        const rafter = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, dist), fasciaMat);
+        rafter.position.copy(mid);
+        rafter.lookAt(vEnd);
+        group.add(rafter);
+    });
+
     // Ridge Beam Cap
-    const ridgeLen = rx1 - rx0;
-    if (ridgeLen > 0.1) {
-        const ridgeCap = new THREE.Mesh(new THREE.BoxGeometry(ridgeLen + 0.1, 0.08, 0.12), fasciaMat);
-        ridgeCap.position.set(centerX, apexY + 0.02, rz);
-        group.add(ridgeCap);
-    }
+    const ridgeLen = Math.max(0.2, rx1 - rx0);
+    const ridgeCap = new THREE.Mesh(new THREE.BoxGeometry(ridgeLen + 0.14, 0.1, 0.14), fasciaMat);
+    ridgeCap.position.set(centerX, apexY + 0.02, rz);
+    group.add(ridgeCap);
 
     scene.add(group);
     roofGroup = group;
@@ -726,7 +813,7 @@ function applyRoofDisplayMode() {
         roofGroup.visible = true;
         roofMesh.material = roofGroup.userData.glassMat;
         if (toggleRoofBtn) {
-            toggleRoofBtn.innerText = "🔍 Roof: X-Ray Glass";
+            toggleRoofBtn.innerText = "🔍 Roof: Transparent";
             toggleRoofBtn.className = "toolbar-btn roof-active";
         }
     } else { // "off"
@@ -738,7 +825,7 @@ function applyRoofDisplayMode() {
     }
 }
 
-// Cycle Roof Mode: Solid -> X-Ray Glass -> Off
+// Cycle Roof Mode: Solid -> Transparent -> Off
 function cycleRoofMode() {
     if (roofMode === "solid") roofMode = "glass";
     else if (roofMode === "glass") roofMode = "off";
@@ -769,29 +856,60 @@ function buildCombinedMultiFloorScene() {
     gridHelper.userData.type = "grid";
     scene.add(gridHelper);
 
+    const activeStairsData = (f1 && f1.stairs) || (f2 && f2.stairs) || null;
+    const activeStairCutout = f2 ? resolveStairCutout(activeStairsData) : null;
+
     function renderFloorLevel(data, floorIndex) {
         const baseY = floorIndex * 2.8;
 
         // 1. Room Floors, Furniture, and Labels
         data.rooms.forEach(rm => {
             const isOutdoor = rm.is_outdoor || rm.type === "balcony" || rm.type === "terrace";
-            const floorGeo = new THREE.PlaneGeometry(rm.size[0] - 0.04, rm.size[1] - 0.04);
             const rmFloorMat = new THREE.MeshStandardMaterial({
                 color: isOutdoor ? 0x64748b : 0xffffff,
                 roughness: isOutdoor ? 0.85 : 0.45
             });
 
-            const floorMesh = new THREE.Mesh(floorGeo, rmFloorMat);
-            floorMesh.rotation.x = -Math.PI / 2;
-            floorMesh.position.set(rm.center[0], baseY + 0.01, rm.center[2]);
-            floorMesh.receiveShadow = true;
-            floorMesh.userData.roomSize = rm.size;
-            floorMesh.userData.roomData = rm;
-            floorMesh.userData.floor = floorIndex;
-            scene.add(floorMesh);
-            floorMeshes.push(floorMesh);
-            if (floorIndex === 1) floor2Meshes.push(floorMesh);
-            else floor1Meshes.push(floorMesh);
+            const rMinX = rm.center[0] - rm.size[0] / 2 + 0.02;
+            const rMaxX = rm.center[0] + rm.size[0] / 2 - 0.02;
+            const rMinZ = rm.center[2] - rm.size[1] / 2 + 0.02;
+            const rMaxZ = rm.center[2] + rm.size[1] / 2 - 0.02;
+
+            // If on Floor 2 and this room overlaps the stairwell cutout, split floor plane around cutout
+            let subRects = [{ minX: rMinX, maxX: rMaxX, minZ: rMinZ, maxZ: rMaxZ }];
+            if (floorIndex === 1 && activeStairCutout && !isOutdoor) {
+                const ox1 = Math.max(rMinX, activeStairCutout.min_x);
+                const ox2 = Math.min(rMaxX, activeStairCutout.max_x);
+                const oz1 = Math.max(rMinZ, activeStairCutout.min_z);
+                const oz2 = Math.min(rMaxZ, activeStairCutout.max_z);
+                if (ox2 > ox1 + 0.01 && oz2 > oz1 + 0.01) {
+                    subRects = [
+                        { minX: rMinX, maxX: ox1, minZ: rMinZ, maxZ: rMaxZ },
+                        { minX: ox2, maxX: rMaxX, minZ: rMinZ, maxZ: rMaxZ },
+                        { minX: ox1, maxX: ox2, minZ: rMinZ, maxZ: oz1 },
+                        { minX: ox1, maxX: ox2, minZ: oz2, maxZ: rMaxZ }
+                    ];
+                }
+            }
+
+            subRects.forEach(sr => {
+                const sw = sr.maxX - sr.minX;
+                const sd = sr.maxZ - sr.minZ;
+                if (sw <= 0.05 || sd <= 0.05) return;
+                const floorGeo = new THREE.PlaneGeometry(sw, sd);
+                const floorMesh = new THREE.Mesh(floorGeo, rmFloorMat.clone());
+                floorMesh.rotation.x = -Math.PI / 2;
+                floorMesh.position.set((sr.minX + sr.maxX) / 2, baseY + 0.01, (sr.minZ + sr.maxZ) / 2);
+                floorMesh.receiveShadow = true;
+                floorMesh.userData.roomSize = [sw, sd];
+                floorMesh.userData.roomData = rm;
+                floorMesh.userData.isOutdoor = isOutdoor;
+                floorMesh.userData.floor = floorIndex;
+                scene.add(floorMesh);
+                floorMeshes.push(floorMesh);
+                if (floorIndex === 1) floor2Meshes.push(floorMesh);
+                else floor1Meshes.push(floorMesh);
+            });
 
             // Add 3D Furniture inside room
             addRoomFurniture(rm, floorIndex);
@@ -866,20 +984,22 @@ function buildCombinedMultiFloorScene() {
     // Render Level 1
     renderFloorLevel(f1, 0);
 
-    // Apply currently selected floor texture to all room floors
-    applyFloorTextureToAllRooms(currentFloorType);
-
     if (f2) {
         // Render Level 2
         renderFloorLevel(f2, 1);
 
         // Render Connecting Staircase between Floor 1 and Floor 2
-        const stairsData = f1.stairs || f2.stairs || {
-            start: [-1.0, 0.0, -1.0],
-            end: [-1.0, 2.8, 2.2],
+        const stairsData = activeStairsData || {
+            start: [-width / 2 + 0.9, 0.0, -depth / 2 + 1.1],
+            end: [-width / 2 + 0.9, 2.8, -depth / 2 + 4.1],
             num_steps: 14,
             width: 1.1,
-            cutout: { min_x: -1.8, max_x: 0.5, min_z: -1.5, max_z: 2.5 }
+            cutout: {
+                min_x: -width / 2 + 0.25,
+                max_x: -width / 2 + 1.55,
+                min_z: -depth / 2 + 0.9,
+                max_z: -depth / 2 + 4.3
+            }
         };
         buildStaircaseAssembly(stairsData);
 
@@ -891,8 +1011,8 @@ function buildCombinedMultiFloorScene() {
             type: "hipped_hut",
             base_y: 5.6,
             height: 2.5,
-            overhang: 0.5,
-            bounds: (f2.metadata && f2.metadata.bounding_box) ? f2.metadata.bounding_box : [-8, 8, -6.5, 6.5]
+            overhang: 0.55,
+            bounds: (f2.metadata && f2.metadata.bounding_box) ? f2.metadata.bounding_box : [-width / 2, width / 2, -depth / 2, depth / 2]
         };
         buildRoofAssembly(roofData);
 
@@ -900,7 +1020,11 @@ function buildCombinedMultiFloorScene() {
         const btnF2 = document.getElementById("btn-floor-2");
         if (btnF2) btnF2.classList.remove("hidden");
         const bpTabF2 = document.getElementById("bp-tab-f2");
-        if (bpTabF2) bpTabF2.classList.remove("hidden");
+        if (bpTabF2) {
+            bpTabF2.classList.remove("hidden");
+            const hasBalcony = (f2.rooms || []).some(r => r.is_outdoor || r.type === "balcony");
+            bpTabF2.innerText = hasBalcony ? "Level 2 (Balcony)" : "Level 2";
+        }
 
         const addFloorBtnText = document.getElementById("add-floor-btn-text");
         if (addFloorBtnText) addFloorBtnText.innerText = "Edit 2nd Floor";
@@ -911,8 +1035,8 @@ function buildCombinedMultiFloorScene() {
             type: "hipped_hut",
             base_y: 2.8,
             height: 2.5,
-            overhang: 0.5,
-            bounds: (f1.metadata && f1.metadata.bounding_box) ? f1.metadata.bounding_box : [-8, 8, -6.5, 6.5]
+            overhang: 0.55,
+            bounds: (f1.metadata && f1.metadata.bounding_box) ? f1.metadata.bounding_box : [-width / 2, width / 2, -depth / 2, depth / 2]
         };
         buildRoofAssembly(roofData);
 
@@ -926,6 +1050,9 @@ function buildCombinedMultiFloorScene() {
         if (addFloorBtnText) addFloorBtnText.innerText = "Add 2nd Floor";
     }
 
+    // Apply currently selected floor texture to all indoor room floors (Floor 1 & Floor 2)
+    applyFloorTextureToAllRooms(currentFloorType);
+
     setFloorViewMode(activeFloorFilter);
     updateCombinedStats();
     drawAll2DCanvases();
@@ -933,12 +1060,12 @@ function buildCombinedMultiFloorScene() {
     // Reset camera nicely if in 3D Orbit mode
     if (!isWalkthroughMode && controls) {
         controls.target.set(0, f2 ? 2.5 : 1.2, 0);
-        camera.position.set(0, Math.max(width, depth) * (f2 ? 1.4 : 1.25), Math.max(width, depth) * (f2 ? 1.5 : 1.35));
+        camera.position.set(0, Math.max(width, depth) * (f2 ? 1.35 : 1.2), Math.max(width, depth) * (f2 ? 1.45 : 1.3));
         controls.update();
     }
 }
 
-// Floor Level View Filter ("both", "1", "2")
+// Floor Level View Filter ("both", "1", "2") - Automatically adapts roof transparency across view modes
 function setFloorViewMode(mode) {
     activeFloorFilter = mode;
 
@@ -951,9 +1078,9 @@ function setFloorViewMode(mode) {
         floor2Meshes.forEach(m => m.visible = true);
         if (staircaseGroup) staircaseGroup.visible = true;
         if (intermediateFloorSlab) intermediateFloorSlab.visible = true;
-        if (roofGroup) roofGroup.visible = (roofMode !== "off");
+        applyRoofDisplayMode();
         if (!isWalkthroughMode && controls) {
-            controls.target.set(0, 2.5, 0);
+            controls.target.set(0, floor2SceneData ? 2.5 : 1.2, 0);
             controls.update();
         }
     } else if (mode === "1") {
@@ -961,7 +1088,15 @@ function setFloorViewMode(mode) {
         floor2Meshes.forEach(m => m.visible = false);
         if (staircaseGroup) staircaseGroup.visible = true;
         if (intermediateFloorSlab) intermediateFloorSlab.visible = false;
-        if (roofGroup) roofGroup.visible = false;
+        // When inspecting Level 1, make single-story roof transparent X-Ray (or hide if 2nd floor exists)
+        if (roofGroup) {
+            if (floor2SceneData) {
+                roofGroup.visible = false;
+            } else {
+                roofMode = "glass";
+                applyRoofDisplayMode();
+            }
+        }
         if (!isWalkthroughMode && controls) {
             controls.target.set(0, 1.2, 0);
             controls.update();
@@ -973,7 +1108,11 @@ function setFloorViewMode(mode) {
         floor2Meshes.forEach(m => m.visible = true);
         if (staircaseGroup) staircaseGroup.visible = true;
         if (intermediateFloorSlab) intermediateFloorSlab.visible = true;
-        if (roofGroup) roofGroup.visible = (roofMode !== "off");
+        // Automatically make roof transparent when inspecting Level 2 so upper rooms & balcony are clear
+        if (roofGroup) {
+            roofMode = "glass";
+            applyRoofDisplayMode();
+        }
         if (!isWalkthroughMode && controls) {
             controls.target.set(0, 3.8, 0);
             controls.update();
@@ -1044,10 +1183,11 @@ function updateBpFloorTabs() {
     if (tab2) tab2.classList.toggle("active", currentBpFloor === 2);
 }
 
-// Build Realistic 3D Door Assembly with Frame, Hinged Leaf & Handles
+// Build Realistic 3D Door Assembly with Frame, Hinged Leaf & Handles (Including Ground Floor Main Entrance Door)
 function buildDoorAssembly(d, idx, baseY = 0) {
-    const doorW = d.width || 1.0;
-    const doorH = d.height || 2.1;
+    const isMainEntrance = Boolean(d.is_main_entrance);
+    const doorW = d.width || (isMainEntrance ? 1.2 : 1.0);
+    const doorH = d.height || (isMainEntrance ? 2.15 : 2.1);
     const isVert = (d.orientation === "vertical");
     const actualBaseY = (d.pos[1] !== undefined && d.pos[1] !== 0) ? d.pos[1] : baseY;
 
@@ -1055,42 +1195,86 @@ function buildDoorAssembly(d, idx, baseY = 0) {
     group.position.set(d.pos[0], actualBaseY, d.pos[2]);
     group.rotation.y = isVert ? Math.PI / 2 : 0;
     group.userData.type = "door";
+    group.userData.isMainEntrance = isMainEntrance;
 
-    // Door Frame (Dark Architectural Trim)
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
-    const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(0.06, doorH, 0.24), frameMat);
-    leftJamb.position.set(-doorW / 2 + 0.03, doorH / 2, 0);
+    // Door Frame (Dark Architectural Trim / Bronze Frame for Main Entrance)
+    const frameMat = new THREE.MeshStandardMaterial({
+        color: isMainEntrance ? 0x1e293b : 0x334155,
+        roughness: 0.4,
+        metalness: isMainEntrance ? 0.35 : 0.1
+    });
+    const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(0.07, doorH, 0.26), frameMat);
+    leftJamb.position.set(-doorW / 2 + 0.035, doorH / 2, 0);
     group.add(leftJamb);
 
-    const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(0.06, doorH, 0.24), frameMat);
-    rightJamb.position.set(doorW / 2 - 0.03, doorH / 2, 0);
+    const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(0.07, doorH, 0.26), frameMat);
+    rightJamb.position.set(doorW / 2 - 0.035, doorH / 2, 0);
     group.add(rightJamb);
 
-    const topJamb = new THREE.Mesh(new THREE.BoxGeometry(doorW, 0.06, 0.24), frameMat);
-    topJamb.position.set(0, doorH - 0.03, 0);
+    const topJamb = new THREE.Mesh(new THREE.BoxGeometry(doorW, 0.07, 0.26), frameMat);
+    topJamb.position.set(0, doorH - 0.035, 0);
     group.add(topJamb);
+
+    // If Main Entrance Door, add Exterior Welcome Porch Step & Overhead Portico Awning
+    if (isMainEntrance) {
+        const outDir = (isVert ? (d.pos[0] < 0 ? -1 : 1) : (d.pos[2] < 0 ? -1 : 1));
+        const stepMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.65 });
+        const porchStep = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.55, 0.06, 0.9), stepMat);
+        porchStep.position.set(0, 0.03, outDir * 0.45);
+        porchStep.receiveShadow = true;
+        group.add(porchStep);
+
+        const matMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.85, 0.02, 0.5),
+            new THREE.MeshStandardMaterial({ color: 0x9a3412, roughness: 0.85 })
+        );
+        matMesh.position.set(0, 0.065, outDir * 0.45);
+        group.add(matMesh);
+
+        const awning = new THREE.Mesh(
+            new THREE.BoxGeometry(doorW + 0.6, 0.09, 0.75),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.4 })
+        );
+        awning.position.set(0, doorH + 0.08, outDir * 0.32);
+        awning.castShadow = true;
+        group.add(awning);
+    }
 
     // Hinged Door Pivot at Left Edge
     const pivot = new THREE.Group();
     pivot.position.set(-doorW / 2 + 0.05, 0, 0);
-    pivot.rotation.y = 0.22;
+    pivot.rotation.y = isMainEntrance ? 0.32 : 0.22;
 
-    // Warm Wooden Door Panel
+    // Door Panel (Rich Mahogany for Main Entrance, Warm Oak for Interior Doors)
     const panelW = doorW - 0.1;
     const panelMat = new THREE.MeshStandardMaterial({
-        color: 0xb45309,
-        roughness: 0.4,
-        metalness: 0.05
+        color: isMainEntrance ? 0x7c2d12 : 0xb45309,
+        roughness: 0.35,
+        metalness: 0.08
     });
-    const panelMesh = new THREE.Mesh(new THREE.BoxGeometry(panelW, doorH - 0.06, 0.06), panelMat);
+    const panelMesh = new THREE.Mesh(new THREE.BoxGeometry(panelW, doorH - 0.06, 0.065), panelMat);
     panelMesh.position.set(panelW / 2, doorH / 2 - 0.02, 0);
     panelMesh.castShadow = true;
     pivot.add(panelMesh);
 
+    // Decorative Frosted Glass Vision Lite on Main Entrance Door
+    if (isMainEntrance) {
+        const liteMat = new THREE.MeshPhysicalMaterial({
+            color: 0xbae6fd,
+            transparent: true,
+            opacity: 0.5,
+            transmission: 0.7,
+            roughness: 0.15
+        });
+        const liteMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.35, 0.075), liteMat);
+        liteMesh.position.set(panelW * 0.48, doorH * 0.54, 0);
+        pivot.add(liteMesh);
+    }
+
     // Brass Door Handles on Both Sides
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.85, roughness: 0.2 });
-    const handleBar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.16), handleMat);
-    handleBar.position.set(panelW - 0.12, 1.0, 0);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.88, roughness: 0.18 });
+    const handleBar = new THREE.Mesh(new THREE.BoxGeometry(0.15, isMainEntrance ? 0.22 : 0.03, 0.17), handleMat);
+    handleBar.position.set(panelW - 0.13, 1.02, 0);
     pivot.add(handleBar);
 
     group.add(pivot);
@@ -1103,7 +1287,7 @@ function buildDoorAssembly(d, idx, baseY = 0) {
         pivot,
         panelMesh,
         isOpen: false,
-        targetRotation: 0.22
+        targetRotation: isMainEntrance ? 0.32 : 0.22
     };
     panelMesh.userData.doorRecord = doorRecord;
     leftJamb.userData.doorRecord = doorRecord;
@@ -1295,10 +1479,11 @@ function addRoomFurniture(rm, floorIndex = 0) {
     }
 }
 
-// Determine which room a point (x, z) is inside
-function findRoomAtPosition(x, z) {
-    if (!currentSceneData || !currentSceneData.rooms) return null;
-    for (const rm of currentSceneData.rooms) {
+// Determine which room a point (x, z) is inside (supports both Floor 1 & Floor 2)
+function findRoomAtPosition(x, z, floorNum = currentBpFloor) {
+    const targetData = (floorNum === 2 && floor2SceneData) ? floor2SceneData : (floor1SceneData || currentSceneData);
+    if (!targetData || !targetData.rooms) return null;
+    for (const rm of targetData.rooms) {
         const halfW = rm.size[0] / 2;
         const halfH = rm.size[1] / 2;
         if (x >= rm.center[0] - halfW && x <= rm.center[0] + halfW &&
@@ -1334,6 +1519,8 @@ function enterRoomThroughDoor(doorRecord) {
 
     const doorPos = doorRecord.data.pos;
     const targetCenter = targetRoom.center;
+    const floorBaseY = (doorPos[1] !== undefined && doorPos[1] >= 2.5) ? 2.8 : ((targetCenter[1] !== undefined && targetCenter[1] >= 2.5) ? 2.8 : 0);
+    const eyeY = floorBaseY + 1.65;
 
     // Activate Walkthrough mode automatically or transition camera smoothly inside the room
     if (!isWalkthroughMode) {
@@ -1342,8 +1529,8 @@ function enterRoomThroughDoor(doorRecord) {
 
     // Smoothly walk from current position through the doorway into the target room center
     const startPos = camera.position.clone();
-    const midPos = new THREE.Vector3(doorPos[0], 1.65, doorPos[2]);
-    const endPos = new THREE.Vector3(targetCenter[0], 1.65, targetCenter[2]);
+    const midPos = new THREE.Vector3(doorPos[0], eyeY, doorPos[2]);
+    const endPos = new THREE.Vector3(targetCenter[0], eyeY, targetCenter[2]);
 
     // Orient camera heading toward the target room center
     const dx = endPos.x - startPos.x;
@@ -1365,13 +1552,28 @@ function enterRoomThroughDoor(doorRecord) {
 
 function teleportToRoom(rm) {
     if (!rm) return;
+    const floorBaseY = (rm.center[1] !== undefined && rm.center[1] >= 2.5) ? 2.8 : (rm.floorName === "L2" ? 2.8 : 0);
+    if (floorBaseY >= 2.5) {
+        currentBpFloor = 2;
+        updateBpFloorTabs();
+    } else {
+        currentBpFloor = 1;
+        updateBpFloorTabs();
+    }
+
+    // Make roof transparent when teleporting to inspect a room so view is never blocked
+    if (roofMode === "solid") {
+        roofMode = "glass";
+        applyRoofDisplayMode();
+    }
+
     if (isWalkthroughMode) {
-        camera.position.set(rm.center[0], 1.65, rm.center[2]);
+        camera.position.set(rm.center[0], floorBaseY + 1.65, rm.center[2]);
         updateWalkthroughCameraTarget();
         document.getElementById("current-room-label").innerText = rm.name;
     } else {
-        controls.target.set(rm.center[0], 1.0, rm.center[2]);
-        camera.position.set(rm.center[0], 11, rm.center[2] + 9);
+        controls.target.set(rm.center[0], floorBaseY + 1.0, rm.center[2]);
+        camera.position.set(rm.center[0], floorBaseY + 11, rm.center[2] + 9);
         controls.update();
     }
     drawAll2DCanvases();
@@ -1395,9 +1597,18 @@ function enableWalkthroughMode(resetPosition = true) {
     setActiveViewBtn("view-walk-btn");
     document.getElementById("walkthrough-hud").classList.remove("hidden");
 
-    if (resetPosition && currentSceneData && currentSceneData.rooms.length > 0) {
-        const startRm = currentSceneData.rooms[0];
-        camera.position.set(startRm.center[0], 1.65, startRm.center[2]);
+    // Make roof transparent glass in walkthrough mode so user sees vaulted roof & rafters from inside
+    if (roofGroup && roofMode === "solid") {
+        roofMode = "glass";
+        applyRoofDisplayMode();
+    }
+
+    const activeData = (currentBpFloor === 2 && floor2SceneData) ? floor2SceneData : (floor1SceneData || currentSceneData);
+    const floorBaseY = (currentBpFloor === 2 && floor2SceneData) ? 2.8 : 0;
+
+    if (resetPosition && activeData && activeData.rooms.length > 0) {
+        const startRm = activeData.rooms[0];
+        camera.position.set(startRm.center[0], floorBaseY + 1.65, startRm.center[2]);
         walkYaw = 0;
         walkPitch = 0;
         updateWalkthroughCameraTarget();
@@ -1437,7 +1648,7 @@ function animate() {
         // Quadratic bezier interpolation through the doorway
         const inv = 1 - t;
         camera.position.x = inv * inv * activeCamTransition.startPos.x + 2 * inv * t * activeCamTransition.midPos.x + t * t * activeCamTransition.endPos.x;
-        camera.position.y = 1.65;
+        camera.position.y = activeCamTransition.endPos.y;
         camera.position.z = inv * inv * activeCamTransition.startPos.z + 2 * inv * t * activeCamTransition.midPos.z + t * t * activeCamTransition.endPos.z;
         updateWalkthroughCameraTarget();
         drawAll2DCanvases();
@@ -1466,12 +1677,13 @@ function animate() {
 
             camera.position.x += (fx * forward + rx * strafe) * moveSpeed;
             camera.position.z += (fz * forward + rz * strafe) * moveSpeed;
-            camera.position.y = 1.65;
+            const onF2 = (currentBpFloor === 2 && floor2SceneData) || camera.position.y > 3.0;
+            camera.position.y = onF2 ? (2.8 + 1.65) : 1.65;
 
             updateWalkthroughCameraTarget();
 
             // Update current room badge
-            const curRm = findRoomAtPosition(camera.position.x, camera.position.z);
+            const curRm = findRoomAtPosition(camera.position.x, camera.position.z, onF2 ? 2 : 1);
             if (curRm) {
                 document.getElementById("current-room-label").innerText = curRm.name;
             }
@@ -1601,9 +1813,9 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
         ctx.fillText(`${rm.size[0]}m × ${rm.size[1]}m`, rx + rw / 2, ry + rh / 2 + 10);
     });
 
-    // 3. Draw Connecting Stairs Indicator
+    // 3. Draw Connecting Stairs Indicator (Only when a 2nd floor exists)
     const stairs = data.stairs || (floor1SceneData && floor1SceneData.stairs);
-    if (stairs && stairs.start && stairs.end) {
+    if (floor2SceneData && stairs && stairs.start && stairs.end) {
         const sx1 = ox + (stairs.start[0] - 0.55) * scale;
         const sy1 = oy + Math.min(stairs.start[2], stairs.end[2]) * scale;
         const sw = 1.1 * scale;
@@ -1684,22 +1896,31 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
         ctx.stroke();
     });
 
-    // 6. Draw Doors (Flame Orange Architectural Door Leaf + Swing Arc)
-    ctx.strokeStyle = "#ff5a1f";
-    ctx.lineWidth = 2;
+    // 6. Draw Doors (Flame Orange Architectural Door Leaf + Swing Arc; Emerald Highlight for Main Entrance)
     (data.doors || []).forEach(d => {
+        const isMain = Boolean(d.is_main_entrance);
         const dx = ox + d.pos[0] * scale;
         const dy = oy + d.pos[2] * scale;
-        const r = Math.max((d.width || 1.0) * scale * 0.48, 6);
+        const r = Math.max((d.width || (isMain ? 1.2 : 1.0)) * scale * 0.48, 6);
 
+        ctx.strokeStyle = isMain ? "#10b981" : "#ff5a1f";
+        ctx.lineWidth = isMain ? 2.6 : 2;
         ctx.beginPath();
         ctx.arc(dx, dy, r, 0, Math.PI / 2);
         ctx.stroke();
 
-        ctx.fillStyle = "#ff5a1f";
+        ctx.fillStyle = isMain ? "#10b981" : "#ff5a1f";
         ctx.beginPath();
-        ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+        ctx.arc(dx, dy, isMain ? 3.5 : 2.5, 0, Math.PI * 2);
         ctx.fill();
+
+        if (isMain) {
+            ctx.fillStyle = "#10b981";
+            ctx.font = "bold 7.5px 'Plus Jakarta Sans', sans-serif";
+            ctx.textAlign = "center";
+            const labelY = d.pos[2] < 0 ? dy - 6 : dy + 12;
+            ctx.fillText("MAIN ENTRANCE", dx, labelY);
+        }
     });
 
     // 7. Draw Furniture Pieces on 2D Blueprint (Filtered by Current Floor)
@@ -2217,11 +2438,13 @@ function setupEvents() {
         });
     });
 
-    // Camera View Modes
+    // Camera View Modes (Automatically adapts roof transparency in different view modes)
     document.getElementById("view-3d-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-3d-btn");
-        if (roofGroup && activeFloorFilter !== "1") roofGroup.visible = (roofMode !== "off");
+        if (roofMode === "off" && activeFloorFilter !== "1") roofMode = "solid";
+        applyRoofDisplayMode();
+        if (roofGroup && activeFloorFilter === "1" && floor2SceneData) roofGroup.visible = false;
         camera.position.set(0, floor2SceneData ? 24 : 18, floor2SceneData ? 26 : 22);
         controls.target.set(0, floor2SceneData ? 2.5 : 1.2, 0);
         controls.update();
@@ -2230,6 +2453,9 @@ function setupEvents() {
     document.getElementById("view-top-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-top-btn");
+        // In Top 2D view mode, roof becomes transparent/hidden so all rooms are clear from above
+        roofMode = "glass";
+        applyRoofDisplayMode();
         if (roofGroup) roofGroup.visible = false;
         camera.position.set(0, 32, 0.01);
         controls.target.set(0, 0, 0);
@@ -2237,20 +2463,23 @@ function setupEvents() {
     });
 
     document.getElementById("view-walk-btn").addEventListener("click", () => {
-        if (roofGroup) roofGroup.visible = false;
+        // In Walkthrough view mode, roof becomes transparent glass so vaulted rafters are visible overhead
+        roofMode = "glass";
+        applyRoofDisplayMode();
         enableWalkthroughMode(true);
     });
 
     document.getElementById("exit-walk-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-3d-btn");
-        if (roofGroup && activeFloorFilter !== "1") roofGroup.visible = (roofMode !== "off");
+        applyRoofDisplayMode();
+        if (roofGroup && activeFloorFilter === "1" && floor2SceneData) roofGroup.visible = false;
         camera.position.set(0, floor2SceneData ? 24 : 18, floor2SceneData ? 26 : 22);
         controls.target.set(0, floor2SceneData ? 2.5 : 1.2, 0);
         controls.update();
     });
 
-    // Roof Mode Toggle (Solid -> X-Ray Glass -> Off)
+    // Roof Mode Toggle (Solid -> Transparent -> Off)
     const toggleRoofBtn = document.getElementById("toggle-roof-btn");
     if (toggleRoofBtn) {
         toggleRoofBtn.addEventListener("click", () => cycleRoofMode());
@@ -2335,6 +2564,11 @@ function setupEvents() {
             if (spinner) spinner.classList.remove("hidden");
             if (btnText) btnText.innerText = "Extruding 2nd Floor...";
 
+            const f1Width = (floor1SceneData && floor1SceneData.metadata && floor1SceneData.metadata.world_size)
+                ? floor1SceneData.metadata.world_size.width : 16;
+            const f1Depth = (floor1SceneData && floor1SceneData.metadata && floor1SceneData.metadata.world_size)
+                ? floor1SceneData.metadata.world_size.depth : 13;
+
             try {
                 const response = await fetch("/api/generate", {
                     method: "POST",
@@ -2342,7 +2576,9 @@ function setupEvents() {
                     body: JSON.stringify({
                         prompt: promptText,
                         floor_index: 1,
-                        base_y: 2.8
+                        base_y: 2.8,
+                        target_width: f1Width,
+                        target_depth: f1Depth
                     })
                 });
 
@@ -2356,8 +2592,13 @@ function setupEvents() {
                 activeFloorFilter = "both";
                 buildCombinedMultiFloorScene();
 
+                const hasBalcony = (data.rooms || []).some(r => r.is_outdoor || r.type === "balcony");
                 const statusText = document.getElementById("ai-status");
-                if (statusText) statusText.innerText = "Level 2 Built • Connecting Stairs & Balcony Active";
+                if (statusText) {
+                    statusText.innerText = hasBalcony
+                        ? "Level 2 Built • Connecting Stairs & Open Balcony Active"
+                        : "Level 2 Built • Connecting Stairs & Upper Rooms Active";
+                }
 
             } catch (err) {
                 console.error("Floor 2 error:", err);
@@ -2380,12 +2621,16 @@ function setupEvents() {
         applyFloorTextureToAllRooms(e.target.value);
     });
 
-    // Move Furniture Toggle Mode
+    // Move Furniture Toggle Mode (Automatically switches roof to transparent so rooms are accessible)
     const furnModeBtn = document.getElementById("furniture-mode-btn");
     furnModeBtn.addEventListener("click", () => {
         isFurnitureMode = !isFurnitureMode;
         furnModeBtn.classList.toggle("active", isFurnitureMode);
         document.getElementById("canvas-container").style.cursor = isFurnitureMode ? "grab" : "default";
+        if (isFurnitureMode && roofMode === "solid") {
+            roofMode = "glass";
+            applyRoofDisplayMode();
+        }
     });
 
     // Add Furniture Catalog Modal Toggle
@@ -2404,14 +2649,20 @@ function setupEvents() {
     document.querySelectorAll(".catalog-item").forEach(item => {
         item.addEventListener("click", () => {
             const type = item.dataset.type;
+            const targetFloorIdx = (currentBpFloor === 2 && floor2SceneData) ? 1 : 0;
+            const targetBaseY = targetFloorIdx * 2.8;
             const targetPos = isWalkthroughMode ?
                 [camera.position.x + Math.sin(walkYaw) * 2, camera.position.z - Math.cos(walkYaw) * 2] :
                 [controls.target.x + (Math.random() - 0.5) * 2, controls.target.z + (Math.random() - 0.5) * 2];
-            spawnFurniturePiece(type, targetPos[0], targetPos[1]);
+            spawnFurniturePiece(type, targetPos[0], targetPos[1], targetBaseY, targetFloorIdx);
             catalogModal.classList.add("hidden");
             // Auto-enable furniture mode so user can immediately reposition it
             isFurnitureMode = true;
             furnModeBtn.classList.add("active");
+            if (roofMode === "solid") {
+                roofMode = "glass";
+                applyRoofDisplayMode();
+            }
             drawAll2DCanvases();
         });
     });
@@ -2428,8 +2679,8 @@ function setupEvents() {
     document.getElementById("reset-cam-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-3d-btn");
-        controls.target.set(0, 1.2, 0);
-        camera.position.set(0, 18, 22);
+        controls.target.set(0, floor2SceneData ? 2.5 : 1.2, 0);
+        camera.position.set(0, floor2SceneData ? 24 : 18, floor2SceneData ? 26 : 22);
         controls.update();
     });
 
@@ -2474,8 +2725,11 @@ function setupEvents() {
 
     // Export JSON
     document.getElementById("export-json-btn").addEventListener("click", () => {
-        if (!currentSceneData) return;
-        const blob = new Blob([JSON.stringify(currentSceneData, null, 2)], { type: "application/json" });
+        const exportPayload = floor2SceneData
+            ? { floor1: floor1SceneData, floor2: floor2SceneData }
+            : currentSceneData;
+        if (!exportPayload) return;
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = "visionect_floorplan_3d.json";
@@ -2504,15 +2758,22 @@ window.addEventListener("DOMContentLoaded", () => {
             type: "hipped_hut",
             base_y: 2.8,
             height: 2.5,
-            overhang: 0.5,
+            overhang: 0.55,
             bounds: [-8, 8, -6.5, 6.5]
         },
         stairs: {
-            start: [-1.0, 0.0, -1.0],
-            end: [-1.0, 2.8, 2.2],
+            start: [-7.1, 0.0, -5.4],
+            end: [-7.1, 2.8, -2.4],
             num_steps: 14,
             width: 1.1,
-            cutout: { min_x: -1.8, max_x: 0.5, min_z: -1.5, max_z: 2.5 }
+            cutout: {
+                min_x: -7.75,
+                max_x: -6.45,
+                min_z: -5.6,
+                max_z: -2.2,
+                center: [-7.1, 2.8, -3.9],
+                size: [1.3, 3.4]
+            }
         },
         rooms: [
             { id: "living", name: "Living & Dining", type: "living", center: [-3.5, 0, -3], size: [9, 7], area_sqm: 63, color: "#e2e8f0" },
@@ -2522,12 +2783,14 @@ window.addEventListener("DOMContentLoaded", () => {
             { id: "bed2", name: "Guest Bedroom", type: "bedroom", center: [5, 0, 3.5], size: [6, 6], area_sqm: 36, color: "#dbeafe" }
         ],
         walls: [
-            // Outer perimeter walls (Carving window sill and lintel openings so glass is 100% transparent through walls!)
-            // North wall (z = -6.5) with 2 window openings: [-4.3 to -2.7] and [3.7 to 5.3]
+            // Outer perimeter walls (Carving window sill, window lintel, and Main Entrance Door openings!)
+            // North wall (z = -6.5) with window 1 [-4.3 to -2.7], Main Entrance Door [-1.72 to -0.48], and window 2 [3.7 to 5.3]
             { id: 1, start: [-8, 0, -6.5], end: [-4.3, 0, -6.5], base_y: 0, thickness: 0.2, height: 2.8, is_exterior: true },
             { id: 2, start: [-4.3, 0, -6.5], end: [-2.7, 0, -6.5], base_y: 0, thickness: 0.2, height: 1.0, is_exterior: true }, // window 1 sill
             { id: 3, start: [-4.3, 0, -6.5], end: [-2.7, 0, -6.5], base_y: 2.2, thickness: 0.2, height: 0.6, is_exterior: true, is_lintel: true }, // window 1 lintel
-            { id: 4, start: [-2.7, 0, -6.5], end: [3.7, 0, -6.5], base_y: 0, thickness: 0.2, height: 2.8, is_exterior: true },
+            { id: 4, start: [-2.7, 0, -6.5], end: [-1.72, 0, -6.5], base_y: 0, thickness: 0.2, height: 2.8, is_exterior: true },
+            { id: 32, start: [-1.72, 0, -6.5], end: [-0.48, 0, -6.5], base_y: 2.1, thickness: 0.2, height: 0.7, is_exterior: true, is_lintel: true }, // Main Entrance Door lintel
+            { id: 33, start: [-0.48, 0, -6.5], end: [3.7, 0, -6.5], base_y: 0, thickness: 0.2, height: 2.8, is_exterior: true },
             { id: 5, start: [3.7, 0, -6.5], end: [5.3, 0, -6.5], base_y: 0, thickness: 0.2, height: 1.0, is_exterior: true }, // window 2 sill
             { id: 6, start: [3.7, 0, -6.5], end: [5.3, 0, -6.5], base_y: 2.2, thickness: 0.2, height: 0.6, is_exterior: true, is_lintel: true }, // window 2 lintel
             { id: 7, start: [5.3, 0, -6.5], end: [8, 0, -6.5], base_y: 0, thickness: 0.2, height: 2.8, is_exterior: true },
@@ -2569,6 +2832,12 @@ window.addEventListener("DOMContentLoaded", () => {
             { id: 31, start: [2, 0, 0.5], end: [2, 0, 6.5], base_y: 0, thickness: 0.2, height: 2.8 }
         ],
         doors: [
+            {
+                id: "main_entrance_door", name: "Main Entrance", is_main_entrance: true,
+                pos: [-1.1, 0, -6.5], orientation: "horizontal", width: 1.2, height: 2.15,
+                roomA: { id: "exterior_porch", name: "Front Porch (Exterior)", center: [-1.1, 0, -9.0] },
+                roomB: { id: "living", name: "Living & Dining", center: [-3.5, 0, -3] }
+            },
             {
                 id: "door_1", pos: [1, 0, -3], orientation: "vertical", width: 1.0, height: 2.1,
                 roomA: { id: "living", name: "Living & Dining", center: [-3.5, 0, -3] },
