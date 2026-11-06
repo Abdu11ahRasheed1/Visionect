@@ -13,9 +13,20 @@
 
 🚀 **Live Interactive Demo:** [https://visionect.netlify.app/](https://visionect.netlify.app/)
 
-[Live Demo](https://visionect.netlify.app/) • [Key Features](#-key-features) • [Fine-Tuned Weights](#-fine-tuned-model-weights-diffusion-lora) • [2D Blueprints](#-2d-floorplan-blueprints--cad-layouts) • [Benchmarks](#-output-results--evaluation-metrics) • [Quick Start](#-quick-start)
+[Live Demo](https://visionect.netlify.app/) • [Implementation Approaches](#-two-implementation-approaches) • [Key Features](#-key-features) • [Fine-Tuned Weights](#-fine-tuned-model-weights-diffusion-lora) • [2D Blueprints](#-2d-floorplan-blueprints--cad-layouts) • [Benchmarks](#-output-results--evaluation-metrics) • [Quick Start](#-quick-start)
 
 </div>
+
+---
+
+## 🛠️ Two Implementation Approaches
+
+Visionect is implemented and powered by **two complementary architectural approaches** to balance offline generative diffusion with real-time cloud spatial reasoning:
+
+| Approach | Implementation & Pipeline | Key Strengths & Execution | Use Case |
+|---|---|---|---|
+| **Approach 1: Fine-Tuned Model (Local Inference)** | **CubiCasa5K Stable Diffusion v1.5 LoRA** (`train_blueprint_lora.py`, `generate_blueprint.py`, `vectorize_floorplan.py`) running entirely locally with PyTorch. | Operates 100% locally and offline without external API dependencies. Fine-tuned on authentic architectural blueprints to synthesize photorealistic 2D blueprints, extracted into topological vectors using morphological computer vision. | Local research, raster blueprint generation, offline architectural experimentation. |
+| **Approach 2: Groq API Key (Topological Grid Generation)** | **Ultra-Low-Latency Cloud LLM Spatial Reasoning** via Groq API (`llama-3.3-70b-versatile` / `mixtral-8x7b-32768`) paired with our deterministic topological grid compiler and procedural fallback. | Sub-second generative compilation (`~0.18s`), semantic room adjacency resolution, automatic multi-story staircase & balcony alignment, and instant interactive 3D WebGL extrusion. | Live production web app ([visionect.netlify.app](https://visionect.netlify.app/)), fast interactive multi-floor CAD generation. |
 
 ---
 
