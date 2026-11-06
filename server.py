@@ -89,76 +89,144 @@ def validate_prompt(p):
 
     return True, ""
 
-def generate_procedural_fallback_layout(prompt_text):
+def generate_procedural_fallback_layout(prompt_text, floor_index=0):
     """
-    Architectural CAD layout generator that adapts dynamically to requested room counts.
+    Architectural CAD layout generator that adapts dynamically to requested room counts,
+    including upper levels (floor_index=1), balconies/terraces with railings, and studies.
     """
     p = prompt_text.lower()
+    has_balcony = any(b in p for b in ["balcony", "terrace", "deck", "patio", "veranda"])
+    has_study = any(s in p for s in ["study", "office", "work", "library"])
+
     beds = 2
     bed_m = re.search(r'(\d+)\s*(?:bed|bedroom|bhk)', p)
     if bed_m:
         beds = min(max(int(bed_m.group(1)), 1), 6)
-    elif "studio" in p or "one bed" in p:
+    elif "studio" in p or "one bed" in p or "1 bed" in p:
         beds = 1
-    elif "three bed" in p:
+    elif "three bed" in p or "3 bed" in p:
         beds = 3
-    elif "four bed" in p:
+    elif "four bed" in p or "4 bed" in p:
         beds = 4
+    elif floor_index == 1:
+        beds = 1 if (has_balcony or has_study) else 2
 
     baths = 1
-    bath_m = re.search(r'(\d+)\s*(?:bath|bathroom)', p)
+    bath_m = re.search(r'(\d+)\s*(?:bath|bathroom|ensuite)', p)
     if bath_m:
         baths = min(max(int(bath_m.group(1)), 1), 4)
-    elif "two bath" in p:
+    elif "two bath" in p or "2 bath" in p:
         baths = 2
 
-    kitchens = 1
+    kitchens = 0 if (floor_index == 1 and "kitchen" not in p) else 1
     kit_m = re.search(r'(\d+)\s*(?:kitchen)', p)
     if kit_m:
         kitchens = min(max(int(kit_m.group(1)), 1), 3)
     elif "two kitchen" in p:
         kitchens = 2
 
-    # Back row (y = 7 to 13): Bedrooms + Bathrooms packed cleanly
-    total_back_items = beds + baths
-    item_w = 4.0
-    back_row_width = total_back_items * item_w
-
-    # Front row (y = 0 to 7): Living Room + Kitchen(s) stretched to match back_row_width
-    front_items = 1 + kitchens
-    living_w = round(back_row_width * (0.55 if kitchens == 1 else 0.45), 1)
-    rem_w = back_row_width - living_w
-    kit_w = round(rem_w / kitchens, 1)
-
     rooms = []
-    rooms.append({"id": "living", "name": "Living & Dining Room", "type": "living", "x": 0, "y": 0, "w": living_w, "h": 7, "color": "#e2e8f0"})
-    cur_x = living_w
-    for k in range(kitchens):
-        k_name = "Main Kitchen" if k == 0 else f"Prep Kitchen {k+1}"
-        w_val = round(back_row_width - cur_x, 1) if k == kitchens - 1 else kit_w
-        rooms.append({"id": f"kitchen_{k+1}", "name": k_name, "type": "kitchen", "x": round(cur_x, 1), "y": 0, "w": w_val, "h": 7, "color": "#cbd5e1"})
-        cur_x += w_val
 
-    bx = 0
-    for b in range(beds):
-        b_name = "Master Bedroom" if b == 0 else f"Bedroom {b+1}"
-        rooms.append({"id": f"bed_{b+1}", "name": b_name, "type": "bedroom", "x": round(bx, 1), "y": 7, "w": item_w, "h": 6, "color": "#bfdbfe"})
-        bx += item_w
+    if floor_index == 1:
+        # UPPER LEVEL (FLOOR 2) WITH CONNECTING STAIRCASE & OPEN BALCONY
+        f2_width = 16.0
+        
+        # 1. Master Suite
+        master_w = 6.5
+        rooms.append({
+            "id": "f2_master", "name": "Master Suite", "type": "bedroom",
+            "x": 0.0, "y": 0.0, "w": master_w, "h": 6.0, "color": "#bfdbfe"
+        })
+        
+        # 2. Open Balcony / Terrace with Railings
+        cur_x = master_w
+        if has_balcony or True:
+            balcony_w = 5.0
+            balc_name = "Panoramic Sunset Balcony" if ("sunset" in p or "panoramic" in p) else "Open Balcony"
+            rooms.append({
+                "id": "f2_balcony", "name": balc_name, "type": "balcony", "is_outdoor": True,
+                "x": cur_x, "y": 0.0, "w": balcony_w, "h": 6.0, "color": "#6ee7b7"
+            })
+            cur_x += balcony_w
+            
+        # 3. Private Study / Executive Lounge
+        if has_study or cur_x < f2_width:
+            study_w = round(f2_width - cur_x, 1)
+            rooms.append({
+                "id": "f2_study", "name": "Private Study & Library", "type": "office",
+                "x": cur_x, "y": 0.0, "w": study_w, "h": 6.0, "color": "#fed7aa"
+            })
 
-    for ba in range(baths):
-        ba_name = "Primary Bathroom" if ba == 0 else f"Bathroom {ba+1}"
-        rooms.append({"id": f"bath_{ba+1}", "name": ba_name, "type": "bathroom", "x": round(bx, 1), "y": 7, "w": item_w, "h": 6, "color": "#f1f5f9"})
-        bx += item_w
+        # Back row: Staircase Hallway + Ensuite Bath + Secondary Bedroom
+        b_x = 0.0
+        stair_room_w = 4.5
+        rooms.append({
+            "id": "f2_landing", "name": "Staircase Hallway", "type": "living",
+            "x": b_x, "y": 6.0, "w": stair_room_w, "h": 6.0, "color": "#e2e8f0"
+        })
+        b_x += stair_room_w
+        
+        bath_w = 4.5
+        rooms.append({
+            "id": "f2_bath", "name": "Ensuite Bathroom", "type": "bathroom",
+            "x": b_x, "y": 6.0, "w": bath_w, "h": 6.0, "color": "#f1f5f9"
+        })
+        b_x += bath_w
+        
+        if beds > 1 or b_x < f2_width:
+            bed2_w = round(f2_width - b_x, 1)
+            rooms.append({
+                "id": "f2_bed2", "name": "Guest Bedroom Suite", "type": "bedroom",
+                "x": b_x, "y": 6.0, "w": bed2_w, "h": 6.0, "color": "#dbeafe"
+            })
+            
+        total_w = f2_width
+        total_d = 12.0
+    else:
+        # GROUND LEVEL (FLOOR 1)
+        total_back_items = beds + baths
+        item_w = 4.0
+        back_row_width = max(total_back_items * item_w, 14.0)
 
-    total_w = back_row_width
+        living_w = round(back_row_width * (0.55 if kitchens == 1 else 0.45), 1)
+        rem_w = back_row_width - living_w
+        kit_w = round(rem_w / max(kitchens, 1), 1)
+
+        rooms.append({"id": "living", "name": "Living & Dining Room", "type": "living", "x": 0, "y": 0, "w": living_w, "h": 7, "color": "#e2e8f0"})
+        cur_x = living_w
+        for k in range(kitchens):
+            k_name = "Main Kitchen" if k == 0 else f"Prep Kitchen {k+1}"
+            w_val = round(back_row_width - cur_x, 1) if k == kitchens - 1 else kit_w
+            rooms.append({"id": f"kitchen_{k+1}", "name": k_name, "type": "kitchen", "x": round(cur_x, 1), "y": 0, "w": w_val, "h": 7, "color": "#cbd5e1"})
+            cur_x += w_val
+
+        bx = 0
+        for b in range(beds):
+            b_name = "Master Bedroom" if b == 0 else f"Bedroom {b+1}"
+            rooms.append({"id": f"bed_{b+1}", "name": b_name, "type": "bedroom", "x": round(bx, 1), "y": 7, "w": item_w, "h": 6, "color": "#bfdbfe"})
+            bx += item_w
+
+        for ba in range(baths):
+            ba_name = "Primary Bathroom" if ba == 0 else f"Bathroom {ba+1}"
+            rooms.append({"id": f"bath_{ba+1}", "name": ba_name, "type": "bathroom", "x": round(bx, 1), "y": 7, "w": item_w, "h": 6, "color": "#f1f5f9"})
+            bx += item_w
+
+        if has_balcony:
+            balc_w = 4.5
+            rooms.append({"id": "patio_terrace", "name": "Open Garden Terrace", "type": "balcony", "is_outdoor": True, "x": round(bx, 1), "y": 7, "w": balc_w, "h": 6, "color": "#6ee7b7"})
+            bx += balc_w
+            back_row_width = bx
+
+        total_w = back_row_width
+        total_d = 13.0
+
     return {
-        "name": f"Architectural Plan ({beds} Bed, {baths} Bath, {kitchens} Kitchen)",
-        "enhanced_prompt": f"Architecturally zoned layout featuring {beds} bedroom(s), {baths} bathroom(s), and {kitchens} kitchen space(s) arranged around a central circulation core with full doorway connectivity and perimeter daylighting.",
+        "name": f"Architectural Plan Level {floor_index+1} ({beds} Bed, {baths} Bath)",
+        "enhanced_prompt": f"Level {floor_index+1} architectural layout featuring verified spatial circulation, structural wall extrusions, and aperture alignment.",
         "engine": "Visionect CAD Engine",
-        "dimensions": {"width": total_w, "depth": 13},
+        "dimensions": {"width": total_w, "depth": total_d},
         "rooms": rooms,
-        "doors": [],
-        "windows": []
+        "floor_index": floor_index
     }
 
 def call_groq_llm(prompt_text, api_key):
@@ -236,18 +304,19 @@ STRICT ARCHITECTURAL RULES:
     print(f"[Fallback Activated] Serving architectural template for: {prompt_text}")
     return generate_procedural_fallback_layout(prompt_text)
 
-def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
+def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2, base_elevation=0.0, floor_index=0):
     """
     Topological & Geometric Compiler:
     1. Normalizes room coordinates & ensures zero overlaps.
     2. Detects all shared walls between adjacent rooms.
     3. Guarantees EVERY room has a properly aligned door on a shared wall (zero orphan rooms).
     4. Carves physical doorway cutouts in the 3D wall segments.
-    5. Places properly aligned exterior windows only on outer perimeter walls.
+    5. Places exterior windows on perimeter walls, and open railings for balconies/terraces.
+    6. Attaches staircase and hipped hut roof metadata for complete house presentation.
     """
     raw_rooms = layout.get("rooms", [])
     if not raw_rooms:
-        layout = generate_procedural_fallback_layout("2 bedrooms, 1 bathroom, kitchen, living room")
+        layout = generate_procedural_fallback_layout("2 bedrooms, 1 bathroom, kitchen, living room", floor_index=floor_index)
         raw_rooms = layout["rooms"]
 
     # Normalize rooms & compute exact bounding box
@@ -264,11 +333,15 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
         min_y = min(min_y, ry)
         max_x = max(max_x, rx + rw)
         max_y = max(max_y, ry + rh)
+        is_outdoor = rm.get("is_outdoor", False) or (rm.get("type", "").lower() in ["balcony", "terrace", "deck", "patio"])
         norm_rooms.append({
             "idx": idx,
             "id": str(rm.get("id") or f"r{idx+1}"),
             "name": rm.get("name", f"Room {idx+1}"),
             "type": rm.get("type", "generic").lower(),
+            "is_outdoor": is_outdoor,
+            "floor_index": floor_index,
+            "elevation": base_elevation,
             "x": rx,
             "y": ry,
             "w": rw,
@@ -292,12 +365,14 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
     for rm in norm_rooms:
         cx = round(rm["x"] + rm["w"] / 2.0 - ox, 2)
         cz = round(rm["y"] + rm["h"] / 2.0 - oz, 2)
-        rm["center_3d"] = [cx, 0.0, cz]
+        rm["center_3d"] = [cx, base_elevation, cz]
         processed_rooms.append({
             "id": rm["id"],
             "name": rm["name"],
             "type": rm["type"],
-            "center": [cx, 0.0, cz],
+            "is_outdoor": rm["is_outdoor"],
+            "floor_index": floor_index,
+            "center": [cx, base_elevation, cz],
             "bounds": {
                 "minX": round(rm["x"] - ox, 2),
                 "maxX": round(rm["x"] + rm["w"] - ox, 2),
@@ -442,11 +517,12 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
         wx = round(d["x"] - ox, 2)
         wz = round(d["z"] - oz, 2)
         processed_doors.append({
-            "id": f"door_{idx+1}",
-            "pos": [wx, 0.0, wz],
+            "id": f"door_{idx+1}_f{floor_index+1}",
+            "pos": [wx, base_elevation, wz],
             "orientation": d["orientation"],  # 'horizontal' (along X) or 'vertical' (along Z)
             "width": 1.0,
             "height": 2.1,
+            "floor_index": floor_index,
             "roomA": {"id": rmA["id"], "name": rmA["name"], "center": rmA["center_3d"]},
             "roomB": {"id": rmB["id"], "name": rmB["name"], "center": rmB["center_3d"]}
         })
@@ -494,6 +570,9 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
                 continue
 
             is_exterior = (len(set(touching_rooms)) == 1)
+            is_balc_wall = is_exterior and (norm_rooms[touching_rooms[0]].get("is_outdoor") or norm_rooms[touching_rooms[0]]["type"] in ["balcony", "terrace", "deck"])
+            if is_balc_wall:
+                continue
 
             # Check if any door is on this sub-segment
             doors_on_seg = []
@@ -550,8 +629,36 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
                 continue
 
             is_exterior = (len(set(touching_rooms)) == 1)
+            is_balcony_railing = is_exterior and (norm_rooms[touching_rooms[0]].get("is_outdoor") or norm_rooms[touching_rooms[0]]["type"] in ["balcony", "terrace", "deck"])
 
-            # Check doors on this segment
+            def add_wall_piece(c1, c2, baseY, h, is_ext=is_exterior, is_lint=False, is_railing=False):
+                if c2 - c1 <= 0.05: return
+                actual_base_y = round(baseY + base_elevation, 2)
+                if orient == "horizontal":
+                    s3 = [round(c1 - ox, 2), actual_base_y, round(fixed_c - oz, 2)]
+                    e3 = [round(c2 - ox, 2), actual_base_y, round(fixed_c - oz, 2)]
+                else:
+                    s3 = [round(fixed_c - ox, 2), actual_base_y, round(c1 - oz, 2)]
+                    e3 = [round(fixed_c - ox, 2), actual_base_y, round(c2 - oz, 2)]
+                nonlocal wall_id_counter
+                wall_list.append({
+                    "id": wall_id_counter,
+                    "start": s3,
+                    "end": e3,
+                    "base_y": actual_base_y,
+                    "thickness": wall_thickness,
+                    "height": h,
+                    "is_exterior": is_ext,
+                    "is_lintel": is_lint,
+                    "is_railing": is_railing,
+                    "floor_index": floor_index
+                })
+                wall_id_counter += 1
+
+            if is_balcony_railing:
+                add_wall_piece(seg_s, seg_e, 0.0, 1.05, is_ext=True, is_lint=False, is_railing=True)
+                continue
+
             doors_on_seg = []
             for d in selected_doors:
                 if d["orientation"] == orient:
@@ -560,33 +667,11 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
                     if abs(d_fixed - fixed_c) <= 0.35 and (seg_s + 0.2 <= d_along <= seg_e - 0.2):
                         doors_on_seg.append(d_along)
 
-            # Check windows on this segment
             wins_on_seg = []
             for w in selected_windows:
                 if w["orientation"] == orient and abs(w["fixed_c"] - fixed_c) <= 0.25:
                     if seg_s + 0.6 <= w["mid"] <= seg_e - 0.6:
                         wins_on_seg.append(w["mid"])
-
-            def add_wall_piece(c1, c2, baseY, h, is_ext=is_exterior, is_lint=False):
-                if c2 - c1 <= 0.05: return
-                if orient == "horizontal":
-                    s3 = [round(c1 - ox, 2), baseY, round(fixed_c - oz, 2)]
-                    e3 = [round(c2 - ox, 2), baseY, round(fixed_c - oz, 2)]
-                else:
-                    s3 = [round(fixed_c - ox, 2), baseY, round(c1 - oz, 2)]
-                    e3 = [round(fixed_c - ox, 2), baseY, round(c2 - oz, 2)]
-                nonlocal wall_id_counter
-                wall_list.append({
-                    "id": wall_id_counter,
-                    "start": s3,
-                    "end": e3,
-                    "base_y": baseY,
-                    "thickness": wall_thickness,
-                    "height": h,
-                    "is_exterior": is_ext,
-                    "is_lintel": is_lint
-                })
-                wall_id_counter += 1
 
             if not doors_on_seg and not wins_on_seg:
                 add_wall_piece(seg_s, seg_e, 0.0, wall_height)
@@ -630,11 +715,39 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
             wx = round(w["fixed_c"] - ox, 2)
             wz = round(w["mid"] - oz, 2)
         processed_windows.append({
-            "pos": [wx, 1.0, wz],
+            "pos": [wx, round(base_elevation + 1.0, 2), wz],
             "orientation": w["orientation"],
             "width": 1.5,
-            "height": 1.2
+            "height": 1.2,
+            "floor_index": floor_index
         })
+
+    # Connecting Staircase metadata
+    stairs_meta = {
+        "id": f"stairs_f{floor_index+1}",
+        "start": [round(-ox + 1.6, 2), base_elevation, round(-oz + 1.8, 2)],
+        "end": [round(-ox + 1.6, 2), round(base_elevation + wall_height, 2), round(-oz + 5.4, 2)],
+        "width": 1.2,
+        "height": wall_height,
+        "steps": 15,
+        "orientation": "north_south",
+        "floor_index": floor_index,
+        "cutout": {
+            "center": [round(-ox + 1.6, 2), round(base_elevation + wall_height, 2), round(-oz + 3.6, 2)],
+            "size": [1.4, 3.8]
+        }
+    }
+
+    # Hipped Hut Roof metadata
+    roof_meta = {
+        "type": "hipped_hut",
+        "width": width,
+        "depth": depth,
+        "height": 2.3,
+        "base_y": round(base_elevation + wall_height, 2),
+        "overhang": 0.45,
+        "floor_index": floor_index
+    }
 
     return {
         "metadata": {
@@ -642,15 +755,21 @@ def compile_layout_to_3d_scene(layout, wall_height=2.8, wall_thickness=0.2):
             "enhanced_prompt": layout.get("enhanced_prompt", "Architecturally optimized space layout with verified room connectivity."),
             "engine": layout.get("engine", "Groq AI"),
             "world_size": {"width": width, "depth": depth},
+            "floor_index": floor_index,
+            "base_elevation": base_elevation,
             "total_walls": len(wall_list),
             "total_rooms": len(processed_rooms),
             "total_doors": len(processed_doors),
-            "total_windows": len(processed_windows)
+            "total_windows": len(processed_windows),
+            "roof": roof_meta,
+            "stairs": stairs_meta
         },
         "rooms": processed_rooms,
         "walls": wall_list,
         "doors": processed_doors,
-        "windows": processed_windows
+        "windows": processed_windows,
+        "roof": roof_meta,
+        "stairs": stairs_meta
     }
 
 class VisionectHandler(SimpleHTTPRequestHandler):
@@ -665,6 +784,8 @@ class VisionectHandler(SimpleHTTPRequestHandler):
             try:
                 data = json.loads(body) if body else {}
                 prompt = data.get("prompt", "2 bedrooms, 1 bathroom, living room, open kitchen").strip()
+                floor_index = int(data.get("floor_index", 0))
+                base_elevation = float(data.get("base_y", floor_index * 2.8))
                 
                 is_valid, error_msg = validate_prompt(prompt)
                 if not is_valid:
@@ -682,7 +803,7 @@ class VisionectHandler(SimpleHTTPRequestHandler):
 
                 api_key = get_groq_api_key()
                 raw_layout = call_groq_llm(prompt, api_key)
-                scene_3d = compile_layout_to_3d_scene(raw_layout)
+                scene_3d = compile_layout_to_3d_scene(raw_layout, base_elevation=base_elevation, floor_index=floor_index)
                 
                 resp_bytes = json.dumps(scene_3d).encode("utf-8")
                 self.send_response(200)
@@ -695,8 +816,8 @@ class VisionectHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[Server Auto-Recovery] {e}. Serving architectural fallback.")
                 try:
-                    raw_layout = generate_procedural_fallback_layout(prompt)
-                    scene_3d = compile_layout_to_3d_scene(raw_layout)
+                    raw_layout = generate_procedural_fallback_layout(prompt, floor_index=floor_index)
+                    scene_3d = compile_layout_to_3d_scene(raw_layout, base_elevation=base_elevation, floor_index=floor_index)
                     resp_bytes = json.dumps(scene_3d).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")

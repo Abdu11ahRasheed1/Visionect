@@ -714,6 +714,20 @@
                 <button class="preset-pill" data-prompt="4 bedrooms, 2 bathrooms, 2 kitchens, large living room">4-Bed Estate</button>
             </div>
 
+            <!-- Multi-Floor Level Switcher & Add Floor Button -->
+            <div class="floor-nav-container" id="floor-nav-container">
+                <span class="floor-nav-label">FLOORS:</span>
+                <div class="floor-pills" id="floor-pills">
+                    <button class="floor-pill active" id="btn-floor-both" data-floor="both">🏢 Both Floors (3D)</button>
+                    <button class="floor-pill" id="btn-floor-1" data-floor="1">Level 1</button>
+                    <button class="floor-pill hidden" id="btn-floor-2" data-floor="2">Level 2</button>
+                </div>
+                <button class="add-floor-btn" id="open-add-floor-modal-btn" title="Add Upper Level (Floor 2) with Connecting Stairs & Balcony">
+                    <span class="plus-icon">+</span>
+                    <span id="add-floor-btn-text">Add 2nd Floor</span>
+                </button>
+            </div>
+
             <div class="header-status">
                 <span class="status-indicator"></span>
                 <span id="ai-status">CAD Engine Active</span>
@@ -758,6 +772,10 @@
                     <button id="minimize-bp-btn" class="bp-min-btn" title="Minimize/Expand 2D Map">_</button>
                 </div>
                 <div class="live-bp-body" id="live-bp-body">
+                    <div class="bp-floor-tabs" id="bp-floor-tabs">
+                        <button class="bp-tab active" id="bp-tab-f1" data-bp-floor="1">Level 1</button>
+                        <button class="bp-tab hidden" id="bp-tab-f2" data-bp-floor="2">Level 2 (Balcony)</button>
+                    </div>
                     <canvas id="live-2d-canvas" width="310" height="240"></canvas>
                     <div class="live-bp-legend">
                         <span><i class="leg-box wall"></i>Wall</span>
@@ -838,6 +856,7 @@
                     <button id="view-3d-btn" class="toolbar-btn active" title="3D Perspective View">Perspective 3D</button>
                     <button id="view-top-btn" class="toolbar-btn" title="Top-Down 2D Blueprint">Top 2D</button>
                     <button id="view-walk-btn" class="toolbar-btn" title="First-Person WASD Walkthrough">🚶 Walkthrough (WASD)</button>
+                    <button id="toggle-roof-btn" class="toolbar-btn roof-active" title="Toggle Roof Mode: Solid / X-Ray Glass / Off">🏠 Roof: Solid</button>
                 </div>
                 
                 <div class="toolbar-divider"></div>
@@ -914,6 +933,53 @@
                 </div>
             </aside>
         </main>
+    </div>
+
+    <!-- 2nd Floor Custom Architecture Modal -->
+    <div id="add-floor-modal" class="custom-modal hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span class="modal-badge">MULTI-LEVEL CAD ENGINE</span>
+                    <h3>DESIGN SECOND FLOOR (LEVEL 2)</h3>
+                </div>
+                <button id="close-floor-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    Specify your upper-level layout. A physical 3D architectural staircase will automatically connect Floor 1 to Floor 2, and any requested outdoor terrace or balcony will feature open-air glass & steel balustrade railings.
+                </p>
+
+                <div class="modal-input-group">
+                    <label>Floor 2 Room Specification:</label>
+                    <input type="text" id="floor2-prompt-input" 
+                           placeholder="e.g. 1 master bedroom with ensuite bath, private study room, and open outdoor balcony with railings" 
+                           value="1 master bedroom with ensuite bath, private study room, and open outdoor balcony with railings">
+                </div>
+
+                <div class="modal-presets">
+                    <span class="preset-title">ARCHITECTURAL PRESETS FOR LEVEL 2:</span>
+                    <div class="preset-chips">
+                        <button class="chip-btn" data-preset="1 master bedroom with ensuite bathroom, private study, and open outdoor sunset balcony with railings">
+                            🌅 <strong>Master Suite + Study + Sunset Balcony</strong>
+                        </button>
+                        <button class="chip-btn" data-preset="2 bedrooms, 1 bathroom, family lounge, and front open balcony with railings">
+                            🛌 <strong>2-Bed Family Level + Front Balcony</strong>
+                        </button>
+                        <button class="chip-btn" data-preset="1 penthouse studio suite, walk-in bath, and expansive panoramic rooftop terrace balcony with railings">
+                            🍸 <strong>Penthouse Sky Lounge & Roof Terrace</strong>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-floor-modal-btn" class="btn-cancel">Cancel</button>
+                <button id="submit-floor2-btn" class="btn-submit-orange">
+                    <span class="btn-text">🏗️ BUILD 2ND FLOOR</span>
+                    <div class="spinner hidden" id="floor2-spinner"></div>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

@@ -3,6 +3,14 @@
 
 let scene, camera, renderer, controls;
 let currentSceneData = null;
+let floor1SceneData = null;
+let floor2SceneData = null;
+let activeFloorFilter = "both"; // "both", "1", "2"
+let currentBpFloor = 1;         // 1 or 2 for 2D blueprint display
+let roofMode = "solid";         // "solid", "glass", "off"
+let roofGroup = null;
+let staircaseGroup = null;
+let intermediateFloorSlab = null;
 let wallMaterial;
 let currentFloorType = "wood";
 let show3DLabels = true;
@@ -13,6 +21,9 @@ const floorMeshes = [];
 const doorObjects = [];     // Interactive door assemblies for raycasting & animation
 const doorInteractables = []; // Meshes that raycaster checks for door clicks
 const labelSprites = [];
+const railingMeshes = [];
+const floor1Meshes = [];
+const floor2Meshes = [];
 
 // Raycaster & Mouse for interactive doors and furniture dragging
 const raycaster = new THREE.Raycaster();
@@ -284,7 +295,7 @@ function createRoomLabelSprite(rm) {
     const tex = new THREE.CanvasTexture(canvas);
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
     const sprite = new THREE.Sprite(mat);
-    sprite.position.set(rm.center[0], 3.25, rm.center[2]);
+    sprite.position.set(rm.center[0], (baseY || 0) + 3.25, rm.center[2]);
     sprite.scale.set(3.4, 0.93, 1);
     sprite.visible = show3DLabels;
     sprite.userData.type = "label";
@@ -295,6 +306,9 @@ function createRoomLabelSprite(rm) {
 function clearScene() {
     wallMeshes.forEach(m => scene.remove(m));
     wallMeshes.length = 0;
+
+    railingMeshes.forEach(m => scene.remove(m));
+    railingMeshes.length = 0;
 
     furnitureMeshes.forEach(m => scene.remove(m));
     furnitureMeshes.length = 0;
@@ -310,124 +324,735 @@ function clearScene() {
     labelSprites.forEach(s => scene.remove(s));
     labelSprites.length = 0;
 
+    floor1Meshes.length = 0;
+    floor2Meshes.length = 0;
+
+    if (roofGroup) {
+        scene.remove(roofGroup);
+        roofGroup = null;
+    }
+    if (staircaseGroup) {
+        scene.remove(staircaseGroup);
+        staircaseGroup = null;
+    }
+    if (intermediateFloorSlab) {
+        scene.remove(intermediateFloorSlab);
+        intermediateFloorSlab = null;
+    }
+
     const toRemove = [];
     scene.traverse(obj => {
-        if (obj.userData && (obj.userData.type === "door" || obj.userData.type === "window" || obj.userData.type === "grid" || obj.userData.type === "label")) {
+        if (obj.userData && (obj.userData.type === "door" || obj.userData.type === "window" || obj.userData.type === "grid" || obj.userData.type === "label" || obj.userData.type === "roof" || obj.userData.type === "stairs" || obj.userData.type === "slab" || obj.userData.type === "railing")) {
             toRemove.push(obj);
         }
     });
     toRemove.forEach(obj => scene.remove(obj));
 }
 
-// Build 3D Asset from API Scene Data
+// Build 3D Asset from API Scene Data (Redirects to Combined Multi-Floor Compiler)
 function build3DScene(data) {
-    clearScene();
-    currentSceneData = data;
+    floor1SceneData = data;
+    buildCombinedMultiFloorScene();
+}
 
-    const width = data.metadata.world_size.width;
-    const depth = data.metadata.world_size.depth;
+// Architectural Balcony Railing Builder (Metal top handrail, base shoe, posts & safety glass balustrade)
+function buildRailingAssembly(w, floorIndex = 0) {
+    const dx = w.end[0] - w.start[0];
+    const dz = w.end[2] - w.start[2];
+    const length = Math.sqrt(dx * dx + dz * dz);
+    if (length < 0.05) return null;
 
-    // 1. Base Ground Grid (Carbon Charcoal)
-    const gridHelper = new THREE.GridHelper(Math.max(width, depth) + 14, 34, 0x27272a, 0x18181b);
-    gridHelper.position.y = -0.02;
-    gridHelper.userData.type = "grid";
-    scene.add(gridHelper);
+    const baseY = w.base_y !== undefined ? w.base_y : (floorIndex * 2.8);
+    const railingH = w.height || 1.05;
 
-    // 2. Extrude Room Floors, 3D Furniture & 3D Floating Name Labels
-    data.rooms.forEach(rm => {
-        const floorGeo = new THREE.PlaneGeometry(rm.size[0] - 0.04, rm.size[1] - 0.04);
-        const rmFloorMat = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
-            roughness: 0.45
-        });
+    const group = new THREE.Group();
+    group.position.set((w.start[0] + w.end[0]) / 2, baseY, (w.start[2] + w.end[2]) / 2);
+    const angle = Math.atan2(dz, dx);
+    group.rotation.y = -angle;
+    group.userData.type = "railing";
+    group.userData.floor = floorIndex;
 
-        const floorMesh = new THREE.Mesh(floorGeo, rmFloorMat);
-        floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.position.set(rm.center[0], 0.01, rm.center[2]);
-        floorMesh.receiveShadow = true;
-        floorMesh.userData.roomSize = rm.size;
-        floorMesh.userData.roomData = rm;
-        scene.add(floorMesh);
-        floorMeshes.push(floorMesh);
+    // 1. Metal Top Handrail (Brushed steel / charcoal aluminum)
+    const handrailMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.82,
+        roughness: 0.25
+    });
+    const handrailGeo = new THREE.BoxGeometry(length, 0.05, 0.08);
+    const handrail = new THREE.Mesh(handrailGeo, handrailMat);
+    handrail.position.set(0, railingH - 0.025, 0);
+    handrail.castShadow = true;
+    group.add(handrail);
 
-        // Add 3D Furniture inside the room
-        addRoomFurniture(rm);
+    // 2. Base Shoe / Bottom Mounting Channel
+    const baseShoeGeo = new THREE.BoxGeometry(length, 0.06, 0.08);
+    const baseShoe = new THREE.Mesh(baseShoeGeo, handrailMat);
+    baseShoe.position.set(0, 0.03, 0);
+    group.add(baseShoe);
 
-        // Add 3D Room Name Label Sprite
-        const labelSprite = createRoomLabelSprite(rm);
-        scene.add(labelSprite);
-        labelSprites.push(labelSprite);
+    // 3. Vertical Stainless Steel Support Posts
+    const postCount = Math.max(2, Math.ceil(length / 1.5) + 1);
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9, roughness: 0.2 });
+    for (let i = 0; i < postCount; i++) {
+        const postX = -length / 2 + (i / (postCount - 1)) * length;
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, railingH, 0.04), postMat);
+        post.position.set(postX, railingH / 2, 0);
+        post.castShadow = true;
+        group.add(post);
+    }
+
+    // 4. Architectural Safety Glass Balustrade Panels
+    const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x93c5fd,
+        transparent: true,
+        opacity: 0.35,
+        transmission: 0.85,
+        roughness: 0.05,
+        metalness: 0.1,
+        ior: 1.5,
+        depthWrite: false
+    });
+    const panelGeo = new THREE.BoxGeometry(Math.max(length - 0.08, 0.1), railingH - 0.12, 0.02);
+    const panel = new THREE.Mesh(panelGeo, glassMat);
+    panel.position.set(0, railingH / 2, 0);
+    group.add(panel);
+
+    scene.add(group);
+    railingMeshes.push(group);
+    if (floorIndex === 1) floor2Meshes.push(group);
+    else floor1Meshes.push(group);
+
+    return group;
+}
+
+// 3D Architectural Staircase Connecting Lower to Upper Floor
+function buildStaircaseAssembly(stairsData) {
+    if (!stairsData) return null;
+    const start = stairsData.start || [-1.0, 0.0, -1.0];
+    const end = stairsData.end || [-1.0, 2.8, 2.2];
+    const numSteps = stairsData.num_steps || 14;
+    const stairW = stairsData.width || 1.1;
+
+    const group = new THREE.Group();
+    group.userData.type = "stairs";
+
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    const dz = end[2] - start[2];
+    const totalDist = Math.hypot(dx, dz) || 0.01;
+    const angle = Math.atan2(dx, dz);
+
+    const stepRise = dy / numSteps;
+    const stepRun = totalDist / numSteps;
+
+    const treadMat = new THREE.MeshStandardMaterial({
+        color: 0xb47b48, // Warm Oak wood
+        roughness: 0.35,
+        metalness: 0.05
+    });
+    const riserMat = new THREE.MeshStandardMaterial({
+        color: 0xf8fafc,
+        roughness: 0.5
+    });
+    const stringerMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b, // Dark charcoal steel
+        roughness: 0.4,
+        metalness: 0.7
     });
 
-    // Apply currently selected floor texture to all room floors
-    applyFloorTextureToAllRooms(currentFloorType);
+    for (let i = 0; i < numSteps; i++) {
+        const t = (i + 0.5) / numSteps;
+        const curX = start[0] + dx * t;
+        const curY = start[1] + stepRise * (i + 1);
+        const curZ = start[2] + dz * t;
 
-    // 3. Extrude 3D Walls (Including Lintel Headers Above Doorways!)
-    data.walls.forEach(w => {
-        const dx = w.end[0] - w.start[0];
-        const dz = w.end[2] - w.start[2];
-        const length = Math.sqrt(dx * dx + dz * dz);
-        if (length < 0.05) return;
+        // Tread
+        const treadGeo = new THREE.BoxGeometry(stairW, 0.04, stepRun + 0.04);
+        const tread = new THREE.Mesh(treadGeo, treadMat);
+        tread.position.set(curX, curY, curZ);
+        tread.rotation.y = angle;
+        tread.castShadow = true;
+        tread.receiveShadow = true;
+        group.add(tread);
 
-        const baseY = w.base_y || 0.0;
-        const wallH = w.height || 2.8;
+        // Riser
+        const riserGeo = new THREE.BoxGeometry(stairW, stepRise, 0.03);
+        const riser = new THREE.Mesh(riserGeo, riserMat);
+        riser.position.set(curX, curY - stepRise / 2, curZ - (dz / totalDist) * (stepRun / 2));
+        riser.rotation.y = angle;
+        riser.castShadow = true;
+        group.add(riser);
+    }
 
-        const wallGeo = new THREE.BoxGeometry(length, wallH, w.thickness || 0.2);
-        const wallMesh = new THREE.Mesh(wallGeo, wallMaterial);
-        wallMesh.castShadow = true;
-        wallMesh.receiveShadow = true;
+    // Side Stringers (Left and Right structural beams)
+    const stringerLength = Math.hypot(totalDist, dy);
+    const stringerGeo = new THREE.BoxGeometry(0.06, 0.22, stringerLength);
+    const pitchAngle = Math.atan2(dy, totalDist);
 
-        wallMesh.position.set(
-            (w.start[0] + w.end[0]) / 2,
-            baseY + wallH / 2,
-            (w.start[2] + w.end[2]) / 2
-        );
-
-        const angle = Math.atan2(dz, dx);
-        wallMesh.rotation.y = -angle;
-
-        scene.add(wallMesh);
-        wallMeshes.push(wallMesh);
+    [-stairW / 2, stairW / 2].forEach(offsetSide => {
+        const stringer = new THREE.Mesh(stringerGeo, stringerMat);
+        const midX = (start[0] + end[0]) / 2 + Math.cos(angle) * offsetSide;
+        const midY = (start[1] + end[1]) / 2;
+        const midZ = (start[2] + end[2]) / 2 - Math.sin(angle) * offsetSide;
+        stringer.position.set(midX, midY, midZ);
+        stringer.rotation.y = angle;
+        stringer.rotation.x = -pitchAngle;
+        stringer.castShadow = true;
+        group.add(stringer);
     });
 
-    // 4. Build Properly Aligned & Interactive 3D Doors
-    (data.doors || []).forEach((d, idx) => {
-        buildDoorAssembly(d, idx);
+    // Angled Handrail
+    const handrailGeo = new THREE.CylinderGeometry(0.028, 0.028, stringerLength, 12);
+    const handrail = new THREE.Mesh(handrailGeo, stringerMat);
+    const railX = (start[0] + end[0]) / 2 + Math.cos(angle) * (stairW / 2 + 0.05);
+    const railY = (start[1] + end[1]) / 2 + 0.9;
+    const railZ = (start[2] + end[2]) / 2 - Math.sin(angle) * (stairW / 2 + 0.05);
+    handrail.position.set(railX, railY, railZ);
+    handrail.rotation.y = angle;
+    handrail.rotation.x = -pitchAngle + Math.PI / 2;
+    group.add(handrail);
+
+    scene.add(group);
+    staircaseGroup = group;
+    return group;
+}
+
+// Intermediate Floor Slab at y = 2.8m with Stair Cutout and Floor 2 Guardrails
+function buildIntermediateFloorSlab(floor2Data, stairsData) {
+    if (!floor2Data) return null;
+    const bounds = (floor2Data.metadata && floor2Data.metadata.bounding_box) ? floor2Data.metadata.bounding_box : [-8, 8, -6.5, 6.5];
+    const minX = bounds[0];
+    const maxX = bounds[1];
+    const minZ = bounds[2];
+    const maxZ = bounds[3];
+
+    const group = new THREE.Group();
+    group.userData.type = "slab";
+
+    const slabMat = new THREE.MeshStandardMaterial({
+        color: 0x334155, // Architectural concrete slate ceiling
+        roughness: 0.6,
+        metalness: 0.1
     });
 
-    // 5. Build Properly Aligned 3D Exterior Windows
-    (data.windows || []).forEach(w => {
-        buildWindowAssembly(w);
+    const stairCutout = (stairsData && stairsData.cutout) ? stairsData.cutout : {
+        min_x: -1.8, max_x: 0.5, min_z: -1.5, max_z: 2.5
+    };
+
+    const slabThickness = 0.18;
+    const slabY = 2.8 - slabThickness / 2;
+
+    const pieces = [
+        { minX: minX, maxX: stairCutout.min_x, minZ: minZ, maxZ: maxZ },
+        { minX: stairCutout.max_x, maxX: maxX, minZ: minZ, maxZ: maxZ },
+        { minX: stairCutout.min_x, maxX: stairCutout.max_x, minZ: minZ, maxZ: stairCutout.min_z },
+        { minX: stairCutout.min_x, maxX: stairCutout.max_x, minZ: stairCutout.max_z, maxZ: maxZ }
+    ];
+
+    pieces.forEach(p => {
+        const pw = p.maxX - p.minX;
+        const pd = p.maxZ - p.minZ;
+        if (pw > 0.05 && pd > 0.05) {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(pw, slabThickness, pd), slabMat);
+            mesh.position.set((p.minX + p.maxX) / 2, slabY, (p.minZ + p.maxZ) / 2);
+            mesh.receiveShadow = true;
+            mesh.castShadow = true;
+            group.add(mesh);
+        }
     });
 
-    // Update Stats, Sidebar & Live 2D Named Blueprint Map
-    updateStatsAndSidebar(data);
-    drawAll2DCanvases();
+    // Safety guardrails around the open stairwell edges on Floor 2
+    const guardrailWalls = [
+        { start: [stairCutout.min_x, 2.8, stairCutout.min_z], end: [stairCutout.min_x, 2.8, stairCutout.max_z], is_railing: true, base_y: 2.8, height: 1.05 },
+        { start: [stairCutout.min_x, 2.8, stairCutout.min_z], end: [stairCutout.max_x, 2.8, stairCutout.min_z], is_railing: true, base_y: 2.8, height: 1.05 }
+    ];
+    guardrailWalls.forEach(gw => {
+        const rail = buildRailingAssembly(gw, 1);
+        if (rail) group.add(rail);
+    });
 
-    // Reset camera nicely if in 3D Orbit mode
-    if (!isWalkthroughMode) {
-        controls.target.set(0, 1.2, 0);
-        camera.position.set(0, Math.max(width, depth) * 1.25, Math.max(width, depth) * 1.35);
-        controls.update();
-    } else {
-        // Place user in the first room (Living room) at eye level
-        const startRoom = data.rooms[0];
-        if (startRoom) {
-            camera.position.set(startRoom.center[0], 1.65, startRoom.center[2]);
-            updateWalkthroughCameraTarget();
+    scene.add(group);
+    intermediateFloorSlab = group;
+    floor2Meshes.push(group);
+    return group;
+}
+
+// Complete House Hut Type Roof Assembly (Pitched/Hipped with Terracotta/Slate & X-Ray Mode)
+function buildRoofAssembly(roofData) {
+    if (!roofData) return null;
+    const baseY = roofData.base_y !== undefined ? roofData.base_y : 2.8;
+    const roofH = roofData.height || 2.4;
+    const overhang = roofData.overhang || 0.45;
+    const bounds = roofData.bounds || [-8, 8, -6.5, 6.5];
+
+    const x0 = bounds[0] - overhang;
+    const x1 = bounds[1] + overhang;
+    const z0 = bounds[2] - overhang;
+    const z1 = bounds[3] + overhang;
+
+    const width = x1 - x0;
+    const depth = z1 - z0;
+    const centerX = (x0 + x1) / 2;
+    const centerZ = (z0 + z1) / 2;
+    const apexY = baseY + roofH;
+
+    const group = new THREE.Group();
+    group.userData.type = "roof";
+
+    // Ridge endpoints along center X axis
+    const ridgeInset = Math.min(width * 0.25, depth * 0.5);
+    const rx0 = centerX - (width / 2 - ridgeInset);
+    const rx1 = centerX + (width / 2 - ridgeInset);
+    const rz = centerZ;
+
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+
+    function addTri(pA, pB, pC) {
+        vertices.push(...pA, ...pB, ...pC);
+        const vA = new THREE.Vector3(...pA);
+        const vB = new THREE.Vector3(...pB);
+        const vC = new THREE.Vector3(...pC);
+        const cb = new THREE.Vector3().subVectors(vC, vB);
+        const ab = new THREE.Vector3().subVectors(vA, vB);
+        const norm = cb.cross(ab).normalize();
+        normals.push(norm.x, norm.y, norm.z, norm.x, norm.y, norm.z, norm.x, norm.y, norm.z);
+        uvs.push(0, 0, 1, 0, 0.5, 1);
+    }
+
+    function addQuad(pA, pB, pC, pD) {
+        addTri(pA, pB, pC);
+        addTri(pA, pC, pD);
+    }
+
+    const c0 = [x0, baseY, z0]; // NW
+    const c1 = [x1, baseY, z0]; // NE
+    const c2 = [x1, baseY, z1]; // SE
+    const c3 = [x0, baseY, z1]; // SW
+    const r0 = [rx0, apexY, rz];
+    const r1 = [rx1, apexY, rz];
+
+    // North slope (c0, c1, r1, r0)
+    addQuad(c0, c1, r1, r0);
+    // South slope (c2, c3, r0, r1)
+    addQuad(c2, c3, r0, r1);
+    // West hip triangle (c3, c0, r0)
+    addTri(c3, c0, r0);
+    // East hip triangle (c1, c2, r1)
+    addTri(c1, c2, r1);
+
+    const roofGeo = new THREE.BufferGeometry();
+    roofGeo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    roofGeo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+    roofGeo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+
+    const roofSolidMat = new THREE.MeshStandardMaterial({
+        color: 0x9a3412, // Rich terracotta Spanish roof tile
+        roughness: 0.55,
+        metalness: 0.1,
+        side: THREE.DoubleSide
+    });
+
+    const roofGlassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.28,
+        transmission: 0.82,
+        roughness: 0.1,
+        metalness: 0.1,
+        ior: 1.5,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+
+    const roofMesh = new THREE.Mesh(roofGeo, (roofMode === "glass" ? roofGlassMat : roofSolidMat));
+    roofMesh.castShadow = true;
+    roofMesh.receiveShadow = true;
+    group.add(roofMesh);
+    group.userData.roofMesh = roofMesh;
+    group.userData.solidMat = roofSolidMat;
+    group.userData.glassMat = roofGlassMat;
+
+    // Architectural Perimeter Fascia Board
+    const fasciaMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+    const eaves = [
+        { len: width, pos: [centerX, baseY - 0.05, z0], rot: 0 },
+        { len: width, pos: [centerX, baseY - 0.05, z1], rot: 0 },
+        { len: depth, pos: [x0, baseY - 0.05, centerZ], rot: Math.PI / 2 },
+        { len: depth, pos: [x1, baseY - 0.05, centerZ], rot: Math.PI / 2 }
+    ];
+    eaves.forEach(e => {
+        const fMesh = new THREE.Mesh(new THREE.BoxGeometry(e.len, 0.12, 0.08), fasciaMat);
+        fMesh.position.set(...e.pos);
+        fMesh.rotation.y = e.rot;
+        group.add(fMesh);
+    });
+
+    // Ridge Beam Cap
+    const ridgeLen = rx1 - rx0;
+    if (ridgeLen > 0.1) {
+        const ridgeCap = new THREE.Mesh(new THREE.BoxGeometry(ridgeLen + 0.1, 0.08, 0.12), fasciaMat);
+        ridgeCap.position.set(centerX, apexY + 0.02, rz);
+        group.add(ridgeCap);
+    }
+
+    scene.add(group);
+    roofGroup = group;
+    applyRoofDisplayMode();
+    return group;
+}
+
+// Update Roof Display Visibility & Material based on roofMode
+function applyRoofDisplayMode() {
+    const toggleRoofBtn = document.getElementById("toggle-roof-btn");
+    if (!roofGroup) {
+        if (toggleRoofBtn) toggleRoofBtn.style.display = "none";
+        return;
+    }
+    if (toggleRoofBtn) toggleRoofBtn.style.display = "inline-flex";
+
+    const roofMesh = roofGroup.userData.roofMesh;
+    if (!roofMesh) return;
+
+    if (roofMode === "solid") {
+        roofGroup.visible = true;
+        roofMesh.material = roofGroup.userData.solidMat;
+        if (toggleRoofBtn) {
+            toggleRoofBtn.innerText = "🏠 Roof: Solid";
+            toggleRoofBtn.className = "toolbar-btn roof-active";
+        }
+    } else if (roofMode === "glass") {
+        roofGroup.visible = true;
+        roofMesh.material = roofGroup.userData.glassMat;
+        if (toggleRoofBtn) {
+            toggleRoofBtn.innerText = "🔍 Roof: X-Ray Glass";
+            toggleRoofBtn.className = "toolbar-btn roof-active";
+        }
+    } else { // "off"
+        roofGroup.visible = false;
+        if (toggleRoofBtn) {
+            toggleRoofBtn.innerText = "🚫 Roof: Hidden";
+            toggleRoofBtn.className = "toolbar-btn";
         }
     }
 }
 
+// Cycle Roof Mode: Solid -> X-Ray Glass -> Off
+function cycleRoofMode() {
+    if (roofMode === "solid") roofMode = "glass";
+    else if (roofMode === "glass") roofMode = "off";
+    else roofMode = "solid";
+    applyRoofDisplayMode();
+}
+
+// Combined Multi-Floor Scene Compiler (Floor 1 + Stairs + Floor 2 + Railings + Roof)
+function buildCombinedMultiFloorScene() {
+    clearScene();
+
+    floor1Meshes.length = 0;
+    floor2Meshes.length = 0;
+    railingMeshes.length = 0;
+
+    const f1 = floor1SceneData;
+    const f2 = floor2SceneData;
+    if (!f1) return;
+
+    currentSceneData = f1;
+
+    const width = f1.metadata ? f1.metadata.world_size.width : 16;
+    const depth = f1.metadata ? f1.metadata.world_size.depth : 13;
+
+    // Ground Grid Helper
+    const gridHelper = new THREE.GridHelper(Math.max(width, depth) + 16, 36, 0x27272a, 0x18181b);
+    gridHelper.position.y = -0.02;
+    gridHelper.userData.type = "grid";
+    scene.add(gridHelper);
+
+    function renderFloorLevel(data, floorIndex) {
+        const baseY = floorIndex * 2.8;
+
+        // 1. Room Floors, Furniture, and Labels
+        data.rooms.forEach(rm => {
+            const isOutdoor = rm.is_outdoor || rm.type === "balcony" || rm.type === "terrace";
+            const floorGeo = new THREE.PlaneGeometry(rm.size[0] - 0.04, rm.size[1] - 0.04);
+            const rmFloorMat = new THREE.MeshStandardMaterial({
+                color: isOutdoor ? 0x64748b : 0xffffff,
+                roughness: isOutdoor ? 0.85 : 0.45
+            });
+
+            const floorMesh = new THREE.Mesh(floorGeo, rmFloorMat);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.position.set(rm.center[0], baseY + 0.01, rm.center[2]);
+            floorMesh.receiveShadow = true;
+            floorMesh.userData.roomSize = rm.size;
+            floorMesh.userData.roomData = rm;
+            floorMesh.userData.floor = floorIndex;
+            scene.add(floorMesh);
+            floorMeshes.push(floorMesh);
+            if (floorIndex === 1) floor2Meshes.push(floorMesh);
+            else floor1Meshes.push(floorMesh);
+
+            // Add 3D Furniture inside room
+            addRoomFurniture(rm, floorIndex);
+
+            // Add 3D Floating Name Label
+            const labelSprite = createRoomLabelSprite(rm, baseY);
+            labelSprite.userData.floor = floorIndex;
+            scene.add(labelSprite);
+            labelSprites.push(labelSprite);
+            if (floorIndex === 1) floor2Meshes.push(labelSprite);
+            else floor1Meshes.push(labelSprite);
+        });
+
+        // 2. Extrude Walls and Balcony Railings
+        data.walls.forEach(w => {
+            if (w.is_railing) {
+                // Outdoor balcony railing with tempered glass & metal balustrade
+                buildRailingAssembly(w, floorIndex);
+                return;
+            }
+
+            const dx = w.end[0] - w.start[0];
+            const dz = w.end[2] - w.start[2];
+            const length = Math.sqrt(dx * dx + dz * dz);
+            if (length < 0.05) return;
+
+            const wallBaseY = (w.base_y !== undefined ? w.base_y : baseY);
+            const wallH = w.height || 2.8;
+
+            const wallGeo = new THREE.BoxGeometry(length, wallH, w.thickness || 0.2);
+            const wallMesh = new THREE.Mesh(wallGeo, wallMaterial);
+            wallMesh.castShadow = true;
+            wallMesh.receiveShadow = true;
+            wallMesh.userData.floor = floorIndex;
+
+            wallMesh.position.set(
+                (w.start[0] + w.end[0]) / 2,
+                wallBaseY + wallH / 2,
+                (w.start[2] + w.end[2]) / 2
+            );
+
+            const angle = Math.atan2(dz, dx);
+            wallMesh.rotation.y = -angle;
+
+            scene.add(wallMesh);
+            wallMeshes.push(wallMesh);
+            if (floorIndex === 1) floor2Meshes.push(wallMesh);
+            else floor1Meshes.push(wallMesh);
+        });
+
+        // 3. Doors
+        (data.doors || []).forEach((d, idx) => {
+            const dGroup = buildDoorAssembly(d, `${floorIndex}_${idx}`, baseY);
+            if (dGroup) {
+                dGroup.userData.floor = floorIndex;
+                if (floorIndex === 1) floor2Meshes.push(dGroup);
+                else floor1Meshes.push(dGroup);
+            }
+        });
+
+        // 4. Windows
+        (data.windows || []).forEach(w => {
+            const wGroup = buildWindowAssembly(w, baseY);
+            if (wGroup) {
+                wGroup.userData.floor = floorIndex;
+                if (floorIndex === 1) floor2Meshes.push(wGroup);
+                else floor1Meshes.push(wGroup);
+            }
+        });
+    }
+
+    // Render Level 1
+    renderFloorLevel(f1, 0);
+
+    // Apply currently selected floor texture to all room floors
+    applyFloorTextureToAllRooms(currentFloorType);
+
+    if (f2) {
+        // Render Level 2
+        renderFloorLevel(f2, 1);
+
+        // Render Connecting Staircase between Floor 1 and Floor 2
+        const stairsData = f1.stairs || f2.stairs || {
+            start: [-1.0, 0.0, -1.0],
+            end: [-1.0, 2.8, 2.2],
+            num_steps: 14,
+            width: 1.1,
+            cutout: { min_x: -1.8, max_x: 0.5, min_z: -1.5, max_z: 2.5 }
+        };
+        buildStaircaseAssembly(stairsData);
+
+        // Render Intermediate Floor Slab with Stairwell Cutout
+        buildIntermediateFloorSlab(f2, stairsData);
+
+        // Render Roof on top of Floor 2 (baseY = 5.6)
+        const roofData = f2.roof || {
+            type: "hipped_hut",
+            base_y: 5.6,
+            height: 2.5,
+            overhang: 0.5,
+            bounds: (f2.metadata && f2.metadata.bounding_box) ? f2.metadata.bounding_box : [-8, 8, -6.5, 6.5]
+        };
+        buildRoofAssembly(roofData);
+
+        // Unhide Floor 2 navigation elements
+        const btnF2 = document.getElementById("btn-floor-2");
+        if (btnF2) btnF2.classList.remove("hidden");
+        const bpTabF2 = document.getElementById("bp-tab-f2");
+        if (bpTabF2) bpTabF2.classList.remove("hidden");
+
+        const addFloorBtnText = document.getElementById("add-floor-btn-text");
+        if (addFloorBtnText) addFloorBtnText.innerText = "Edit 2nd Floor";
+
+    } else {
+        // Single Floor: Render Roof on top of Floor 1 (baseY = 2.8)
+        const roofData = f1.roof || {
+            type: "hipped_hut",
+            base_y: 2.8,
+            height: 2.5,
+            overhang: 0.5,
+            bounds: (f1.metadata && f1.metadata.bounding_box) ? f1.metadata.bounding_box : [-8, 8, -6.5, 6.5]
+        };
+        buildRoofAssembly(roofData);
+
+        // Hide Floor 2 navigation elements
+        const btnF2 = document.getElementById("btn-floor-2");
+        if (btnF2) btnF2.classList.add("hidden");
+        const bpTabF2 = document.getElementById("bp-tab-f2");
+        if (bpTabF2) bpTabF2.classList.add("hidden");
+
+        const addFloorBtnText = document.getElementById("add-floor-btn-text");
+        if (addFloorBtnText) addFloorBtnText.innerText = "Add 2nd Floor";
+    }
+
+    setFloorViewMode(activeFloorFilter);
+    updateCombinedStats();
+    drawAll2DCanvases();
+
+    // Reset camera nicely if in 3D Orbit mode
+    if (!isWalkthroughMode && controls) {
+        controls.target.set(0, f2 ? 2.5 : 1.2, 0);
+        camera.position.set(0, Math.max(width, depth) * (f2 ? 1.4 : 1.25), Math.max(width, depth) * (f2 ? 1.5 : 1.35));
+        controls.update();
+    }
+}
+
+// Floor Level View Filter ("both", "1", "2")
+function setFloorViewMode(mode) {
+    activeFloorFilter = mode;
+
+    document.querySelectorAll(".floor-pill").forEach(p => p.classList.remove("active"));
+    const activePill = document.getElementById(mode === "both" ? "btn-floor-both" : (mode === "1" ? "btn-floor-1" : "btn-floor-2"));
+    if (activePill) activePill.classList.add("active");
+
+    if (mode === "both") {
+        floor1Meshes.forEach(m => m.visible = true);
+        floor2Meshes.forEach(m => m.visible = true);
+        if (staircaseGroup) staircaseGroup.visible = true;
+        if (intermediateFloorSlab) intermediateFloorSlab.visible = true;
+        if (roofGroup) roofGroup.visible = (roofMode !== "off");
+        if (!isWalkthroughMode && controls) {
+            controls.target.set(0, 2.5, 0);
+            controls.update();
+        }
+    } else if (mode === "1") {
+        floor1Meshes.forEach(m => m.visible = true);
+        floor2Meshes.forEach(m => m.visible = false);
+        if (staircaseGroup) staircaseGroup.visible = true;
+        if (intermediateFloorSlab) intermediateFloorSlab.visible = false;
+        if (roofGroup) roofGroup.visible = false;
+        if (!isWalkthroughMode && controls) {
+            controls.target.set(0, 1.2, 0);
+            controls.update();
+        }
+        currentBpFloor = 1;
+        updateBpFloorTabs();
+    } else if (mode === "2") {
+        floor1Meshes.forEach(m => m.visible = false);
+        floor2Meshes.forEach(m => m.visible = true);
+        if (staircaseGroup) staircaseGroup.visible = true;
+        if (intermediateFloorSlab) intermediateFloorSlab.visible = true;
+        if (roofGroup) roofGroup.visible = (roofMode !== "off");
+        if (!isWalkthroughMode && controls) {
+            controls.target.set(0, 3.8, 0);
+            controls.update();
+        }
+        currentBpFloor = 2;
+        updateBpFloorTabs();
+    }
+    drawAll2DCanvases();
+}
+
+// Update Combined Specs Sidebar
+function updateCombinedStats() {
+    const f1 = floor1SceneData;
+    const f2 = floor2SceneData;
+    if (!f1) return;
+
+    let totalArea = 0;
+    let roomList = [];
+    let totalDoors = (f1.doors || []).length;
+
+    f1.rooms.forEach(r => {
+        totalArea += r.area_sqm;
+        roomList.push({ ...r, floorName: "L1" });
+    });
+
+    if (f2) {
+        f2.rooms.forEach(r => {
+            totalArea += r.area_sqm;
+            roomList.push({ ...r, floorName: "L2" });
+        });
+        totalDoors += (f2.doors || []).length;
+    }
+
+    const statArea = document.getElementById("stat-area");
+    if (statArea) statArea.innerText = `${Math.round(totalArea)} m²`;
+
+    const statRooms = document.getElementById("stat-rooms");
+    if (statRooms) statRooms.innerText = roomList.length;
+
+    const statDoors = document.getElementById("stat-doors");
+    if (statDoors) statDoors.innerText = totalDoors;
+
+    const list = document.getElementById("room-list");
+    if (list) {
+        list.innerHTML = "";
+        roomList.forEach(rm => {
+            const div = document.createElement("div");
+            div.className = "room-item";
+            div.title = `Click to enter ${rm.name}`;
+            div.innerHTML = `
+                <div>
+                    <span class="room-badge" style="background: ${rm.floorName === 'L2' ? '#38bdf8' : '#ff5a1f'};"></span>
+                    <strong>[${rm.floorName}] ${rm.name}</strong>
+                </div>
+                <span>${rm.size[0]}m × ${rm.size[1]}m (${rm.area_sqm} m²)</span>
+            `;
+            div.addEventListener("click", () => teleportToRoom(rm));
+            list.appendChild(div);
+        });
+    }
+}
+
+// Synchronize Blueprint Floor Tabs
+function updateBpFloorTabs() {
+    const tab1 = document.getElementById("bp-tab-f1");
+    const tab2 = document.getElementById("bp-tab-f2");
+    if (tab1) tab1.classList.toggle("active", currentBpFloor === 1);
+    if (tab2) tab2.classList.toggle("active", currentBpFloor === 2);
+}
+
 // Build Realistic 3D Door Assembly with Frame, Hinged Leaf & Handles
-function buildDoorAssembly(d, idx) {
+function buildDoorAssembly(d, idx, baseY = 0) {
     const doorW = d.width || 1.0;
     const doorH = d.height || 2.1;
     const isVert = (d.orientation === "vertical");
+    const actualBaseY = (d.pos[1] !== undefined && d.pos[1] !== 0) ? d.pos[1] : baseY;
 
     const group = new THREE.Group();
-    group.position.set(d.pos[0], 0, d.pos[2]);
-    // If wall is vertical (runs along Z axis), rotate door assembly by 90 deg (Math.PI / 2)
+    group.position.set(d.pos[0], actualBaseY, d.pos[2]);
     group.rotation.y = isVert ? Math.PI / 2 : 0;
     group.userData.type = "door";
 
@@ -448,7 +1073,6 @@ function buildDoorAssembly(d, idx) {
     // Hinged Door Pivot at Left Edge
     const pivot = new THREE.Group();
     pivot.position.set(-doorW / 2 + 0.05, 0, 0);
-    // Slightly ajar by 15 degrees so user clearly sees it's a swinging door
     pivot.rotation.y = 0.22;
 
     // Warm Wooden Door Panel
@@ -472,9 +1096,8 @@ function buildDoorAssembly(d, idx) {
     group.add(pivot);
     scene.add(group);
 
-    // Register door object for click-to-open & room transition
     const doorRecord = {
-        id: d.id || `door_${idx + 1}`,
+        id: d.id || `door_${idx}`,
         data: d,
         group,
         pivot,
@@ -488,17 +1111,18 @@ function buildDoorAssembly(d, idx) {
 
     doorObjects.push(doorRecord);
     doorInteractables.push(panelMesh, leftJamb, rightJamb);
+    return group;
 }
 
 // Build Properly Aligned 3D Exterior Window Assembly
-function buildWindowAssembly(w) {
+function buildWindowAssembly(w, baseY = 0) {
     const winW = w.width || 1.5;
     const winH = w.height || 1.2;
-    const baseY = w.pos[1] || 1.0;
+    const winBaseY = (w.pos[1] !== undefined ? w.pos[1] : (baseY + 1.0));
     const isVert = (w.orientation === "vertical");
 
     const group = new THREE.Group();
-    group.position.set(w.pos[0], baseY + winH / 2, w.pos[2]);
+    group.position.set(w.pos[0], winBaseY + winH / 2, w.pos[2]);
     group.rotation.y = isVert ? Math.PI / 2 : 0;
     group.userData.type = "window";
 
@@ -523,7 +1147,7 @@ function buildWindowAssembly(w) {
     const midMullion = new THREE.Mesh(new THREE.BoxGeometry(0.04, winH, 0.22), frameMat);
     group.add(midMullion);
 
-    // Ultra-Clear Architectural Glass Pane (Transparent, Physical Glass)
+    // Ultra-Clear Architectural Glass Pane
     const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         transparent: true,
@@ -539,6 +1163,7 @@ function buildWindowAssembly(w) {
     group.add(glass);
 
     scene.add(group);
+    return group;
 }
 
 // Register a furniture group for dragging
@@ -557,7 +1182,7 @@ function registerDraggableFurniture(group, name = "Furniture") {
 }
 
 // Spawn new furniture piece dynamically
-function spawnFurniturePiece(type, posX = 0, posZ = 0) {
+function spawnFurniturePiece(type, posX = 0, posZ = 0, posY = 0, floorIndex = 0) {
     const group = new THREE.Group();
 
     if (type === "sofa") {
@@ -638,24 +1263,35 @@ function spawnFurniturePiece(type, posX = 0, posZ = 0) {
         registerDraggableFurniture(group, "Floor Lamp");
     }
 
-    group.position.set(posX, 0, posZ);
+    group.position.set(posX, posY, posZ);
+    group.userData.floor = floorIndex;
+    if (floorIndex === 1) floor2Meshes.push(group);
+    else floor1Meshes.push(group);
+
     return group;
 }
 
-// Dynamic Furniture Placer based on Room Type
-function addRoomFurniture(rm) {
+// Dynamic Furniture Placer based on Room Type & Floor
+function addRoomFurniture(rm, floorIndex = 0) {
+    const baseY = floorIndex * 2.8;
     const cx = rm.center[0];
     const cz = rm.center[2];
 
-    if (rm.type.includes("bedroom")) {
-        spawnFurniturePiece("bed", cx, cz);
+    if (rm.type.includes("balcony") || rm.type.includes("terrace")) {
+        spawnFurniturePiece("table", cx - 0.6, cz, baseY, floorIndex);
+        spawnFurniturePiece("plant", cx + 1.2, cz, baseY, floorIndex);
+    } else if (rm.type.includes("study") || rm.type.includes("office")) {
+        spawnFurniturePiece("table", cx, cz - 0.4, baseY, floorIndex);
+        spawnFurniturePiece("lamp", cx - 1.2, cz, baseY, floorIndex);
+    } else if (rm.type.includes("bedroom")) {
+        spawnFurniturePiece("bed", cx, cz, baseY, floorIndex);
     } else if (rm.type.includes("living")) {
-        spawnFurniturePiece("sofa", cx, cz - 0.5);
-        spawnFurniturePiece("table", cx, cz + 0.65);
+        spawnFurniturePiece("sofa", cx, cz - 0.5, baseY, floorIndex);
+        spawnFurniturePiece("table", cx, cz + 0.65, baseY, floorIndex);
     } else if (rm.type.includes("kitchen")) {
-        spawnFurniturePiece("counter", cx, cz - rm.size[1] * 0.25);
+        spawnFurniturePiece("counter", cx, cz - rm.size[1] * 0.25, baseY, floorIndex);
     } else if (rm.type.includes("bathroom")) {
-        spawnFurniturePiece("tub", cx, cz);
+        spawnFurniturePiece("tub", cx, cz, baseY, floorIndex);
     }
 }
 
@@ -881,9 +1517,10 @@ function checkNearestDoorProximity() {
 
 // Draw 2D Architectural Layout on Both Live Overlay Canvas and Drawer Canvas
 function drawAll2DCanvases() {
-    if (!currentSceneData) return;
-    draw2DBlueprintOnCanvas(document.getElementById("live-2d-canvas"), currentSceneData, true);
-    draw2DBlueprintOnCanvas(document.getElementById("cad-canvas"), currentSceneData, true);
+    const dataToDraw = (currentBpFloor === 2 && floor2SceneData) ? floor2SceneData : (floor1SceneData || currentSceneData);
+    if (!dataToDraw) return;
+    draw2DBlueprintOnCanvas(document.getElementById("live-2d-canvas"), dataToDraw, true);
+    draw2DBlueprintOnCanvas(document.getElementById("cad-canvas"), dataToDraw, true);
 }
 
 function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
@@ -894,8 +1531,8 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
 
     ctx.clearRect(0, 0, w, h);
 
-    const worldW = Math.max(data.metadata.world_size.width, 8);
-    const worldD = Math.max(data.metadata.world_size.depth, 8);
+    const worldW = (data.metadata && data.metadata.world_size) ? Math.max(data.metadata.world_size.width, 8) : 16;
+    const worldD = (data.metadata && data.metadata.world_size) ? Math.max(data.metadata.world_size.depth, 8) : 13;
     const pad = 28;
     const scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldD);
 
@@ -920,7 +1557,11 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
         living: "rgba(255, 90, 31, 0.14)",
         kitchen: "rgba(245, 158, 11, 0.14)",
         bedroom: "rgba(255, 255, 255, 0.08)",
-        bathroom: "rgba(34, 197, 94, 0.12)"
+        bathroom: "rgba(34, 197, 94, 0.12)",
+        balcony: "rgba(56, 189, 248, 0.18)",
+        terrace: "rgba(56, 189, 248, 0.18)",
+        study: "rgba(168, 85, 247, 0.14)",
+        office: "rgba(168, 85, 247, 0.14)"
     };
 
     data.rooms.forEach(rm => {
@@ -937,34 +1578,95 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
         ctx.fillStyle = fillCol;
         ctx.fillRect(rx, ry, rw, rh);
 
+        // Decking hash pattern for outdoor balcony / terrace
+        if (rm.type.includes("balcony") || rm.type.includes("terrace") || rm.is_outdoor) {
+            ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+            ctx.lineWidth = 1;
+            for (let dy = 6; dy < rh; dy += 8) {
+                ctx.beginPath();
+                ctx.moveTo(rx + 2, ry + dy);
+                ctx.lineTo(rx + rw - 2, ry + dy);
+                ctx.stroke();
+            }
+        }
+
         // Room Name & Dimensions Label
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 10px 'Plus Jakarta Sans', sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(rm.name, rx + rw / 2, ry + rh / 2 - 3);
 
-        ctx.fillStyle = "#a1a1aa";
+        ctx.fillStyle = (rm.type.includes("balcony") || rm.is_outdoor) ? "#38bdf8" : "#a1a1aa";
         ctx.font = "9px 'Plus Jakarta Sans', sans-serif";
         ctx.fillText(`${rm.size[0]}m × ${rm.size[1]}m`, rx + rw / 2, ry + rh / 2 + 10);
     });
 
-    // 3. Draw Structural Walls (Skipping lintels so doorway openings show clearly on 2D map!)
-    ctx.strokeStyle = "#f4f4f5";
-    ctx.lineWidth = 2.8;
+    // 3. Draw Connecting Stairs Indicator
+    const stairs = data.stairs || (floor1SceneData && floor1SceneData.stairs);
+    if (stairs && stairs.start && stairs.end) {
+        const sx1 = ox + (stairs.start[0] - 0.55) * scale;
+        const sy1 = oy + Math.min(stairs.start[2], stairs.end[2]) * scale;
+        const sw = 1.1 * scale;
+        const sd = Math.abs(stairs.end[2] - stairs.start[2]) * scale;
+
+        // Stairwell background
+        ctx.fillStyle = "rgba(245, 158, 11, 0.16)";
+        ctx.fillRect(sx1, sy1, sw, sd);
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(sx1, sy1, sw, sd);
+
+        // Treads
+        const numLines = 8;
+        for (let i = 1; i < numLines; i++) {
+            const stepY = sy1 + (sd / numLines) * i;
+            ctx.beginPath();
+            ctx.moveTo(sx1, stepY);
+            ctx.lineTo(sx1 + sw, stepY);
+            ctx.stroke();
+        }
+
+        // Direction Arrow & Label
+        ctx.fillStyle = "#fbbf24";
+        ctx.font = "bold 8px 'Plus Jakarta Sans', sans-serif";
+        ctx.textAlign = "center";
+        const dirLabel = currentBpFloor === 2 ? "STAIRS (DN) ↓" : "STAIRS (UP) ↑";
+        ctx.fillText(dirLabel, sx1 + sw / 2, sy1 + sd / 2 + 3);
+    }
+
+    // 4. Draw Structural Walls and Balcony Railings
     data.walls.forEach(wall => {
-        if (wall.base_y && wall.base_y > 0.5) return; // Don't draw overhead lintel over doorway gap
+        if (wall.base_y && wall.base_y > 3.0 && currentBpFloor === 1) return;
         const x1 = ox + wall.start[0] * scale;
         const y1 = oy + wall.start[2] * scale;
         const x2 = ox + wall.end[0] * scale;
         const y2 = oy + wall.end[2] * scale;
 
+        if (wall.is_railing) {
+            // Open architectural balcony railing: dashed cyan line
+            ctx.save();
+            ctx.strokeStyle = "#38bdf8";
+            ctx.lineWidth = 2.4;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        if (wall.is_lintel) return; // Skip door header lintel so doorway gap is clear
+
+        ctx.strokeStyle = "#f4f4f5";
+        ctx.lineWidth = 2.8;
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
     });
 
-    // 4. Draw Windows (Crisp Platinum Bars on Exterior Walls)
+    // 5. Draw Windows (Crisp Platinum Bars on Exterior Walls)
     ctx.strokeStyle = "#d4d4d8";
     ctx.lineWidth = 3.5;
     (data.windows || []).forEach(win => {
@@ -982,13 +1684,13 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
         ctx.stroke();
     });
 
-    // 5. Draw Doors (Flame Orange Architectural Door Leaf + Swing Arc)
+    // 6. Draw Doors (Flame Orange Architectural Door Leaf + Swing Arc)
     ctx.strokeStyle = "#ff5a1f";
     ctx.lineWidth = 2;
     (data.doors || []).forEach(d => {
         const dx = ox + d.pos[0] * scale;
         const dy = oy + d.pos[2] * scale;
-        const r = Math.max(d.width * scale * 0.48, 6);
+        const r = Math.max((d.width || 1.0) * scale * 0.48, 6);
 
         ctx.beginPath();
         ctx.arc(dx, dy, r, 0, Math.PI / 2);
@@ -1000,8 +1702,9 @@ function draw2DBlueprintOnCanvas(canvas, data, showPlayer) {
         ctx.fill();
     });
 
-    // 6. Draw Furniture Pieces on 2D Blueprint
+    // 7. Draw Furniture Pieces on 2D Blueprint (Filtered by Current Floor)
     furnitureMeshes.forEach(fGroup => {
+        if (fGroup.userData.floor !== undefined && fGroup.userData.floor !== (currentBpFloor - 1)) return;
         const fx = ox + fGroup.position.x * scale;
         const fy = oy + fGroup.position.z * scale;
         ctx.fillStyle = "rgba(161, 161, 170, 0.85)";
@@ -1300,8 +2003,12 @@ async function generateFloorplan(promptText) {
             throw new Error(data.error || `Server error (${response.status})`);
         }
 
-        // 2. Build 3D Scene & 2D Named Map
-        build3DScene(data);
+        // 2. Build 3D Multi-Floor Scene & 2D Named Map
+        floor1SceneData = data;
+        floor2SceneData = null;
+        activeFloorFilter = "both";
+        currentBpFloor = 1;
+        buildCombinedMultiFloorScene();
 
         const roomCount = data.metadata ? data.metadata.total_rooms : 4;
         statusText.innerText = `Plan Generated • ${roomCount} Rooms Synced`;
@@ -1514,30 +2221,154 @@ function setupEvents() {
     document.getElementById("view-3d-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-3d-btn");
-        camera.position.set(0, 18, 22);
-        controls.target.set(0, 1.2, 0);
+        if (roofGroup && activeFloorFilter !== "1") roofGroup.visible = (roofMode !== "off");
+        camera.position.set(0, floor2SceneData ? 24 : 18, floor2SceneData ? 26 : 22);
+        controls.target.set(0, floor2SceneData ? 2.5 : 1.2, 0);
         controls.update();
     });
 
     document.getElementById("view-top-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-top-btn");
-        camera.position.set(0, 30, 0.01);
+        if (roofGroup) roofGroup.visible = false;
+        camera.position.set(0, 32, 0.01);
         controls.target.set(0, 0, 0);
         controls.update();
     });
 
     document.getElementById("view-walk-btn").addEventListener("click", () => {
+        if (roofGroup) roofGroup.visible = false;
         enableWalkthroughMode(true);
     });
 
     document.getElementById("exit-walk-btn").addEventListener("click", () => {
         disableWalkthroughMode();
         setActiveViewBtn("view-3d-btn");
-        camera.position.set(0, 18, 22);
-        controls.target.set(0, 1.2, 0);
+        if (roofGroup && activeFloorFilter !== "1") roofGroup.visible = (roofMode !== "off");
+        camera.position.set(0, floor2SceneData ? 24 : 18, floor2SceneData ? 26 : 22);
+        controls.target.set(0, floor2SceneData ? 2.5 : 1.2, 0);
         controls.update();
     });
+
+    // Roof Mode Toggle (Solid -> X-Ray Glass -> Off)
+    const toggleRoofBtn = document.getElementById("toggle-roof-btn");
+    if (toggleRoofBtn) {
+        toggleRoofBtn.addEventListener("click", () => cycleRoofMode());
+    }
+
+    // Multi-Floor Level Switchers (Both, Level 1, Level 2)
+    const btnFloorBoth = document.getElementById("btn-floor-both");
+    if (btnFloorBoth) {
+        btnFloorBoth.addEventListener("click", () => setFloorViewMode("both"));
+    }
+    const btnFloor1 = document.getElementById("btn-floor-1");
+    if (btnFloor1) {
+        btnFloor1.addEventListener("click", () => setFloorViewMode("1"));
+    }
+    const btnFloor2 = document.getElementById("btn-floor-2");
+    if (btnFloor2) {
+        btnFloor2.addEventListener("click", () => setFloorViewMode("2"));
+    }
+
+    // Blueprint 2D Floor Switcher Tabs
+    const bpTabF1 = document.getElementById("bp-tab-f1");
+    if (bpTabF1) {
+        bpTabF1.addEventListener("click", () => {
+            currentBpFloor = 1;
+            updateBpFloorTabs();
+            drawAll2DCanvases();
+        });
+    }
+    const bpTabF2 = document.getElementById("bp-tab-f2");
+    if (bpTabF2) {
+        bpTabF2.addEventListener("click", () => {
+            currentBpFloor = 2;
+            updateBpFloorTabs();
+            drawAll2DCanvases();
+        });
+    }
+
+    // 2nd Floor Custom Architecture Modal Handlers
+    const addFloorModal = document.getElementById("add-floor-modal");
+    const openAddFloorModalBtn = document.getElementById("open-add-floor-modal-btn");
+    const closeFloorModalBtn = document.getElementById("close-floor-modal-btn");
+    const cancelFloorModalBtn = document.getElementById("cancel-floor-modal-btn");
+    const submitFloor2Btn = document.getElementById("submit-floor2-btn");
+
+    if (openAddFloorModalBtn && addFloorModal) {
+        openAddFloorModalBtn.addEventListener("click", () => {
+            addFloorModal.classList.remove("hidden");
+        });
+    }
+    if (closeFloorModalBtn && addFloorModal) {
+        closeFloorModalBtn.addEventListener("click", () => {
+            addFloorModal.classList.add("hidden");
+        });
+    }
+    if (cancelFloorModalBtn && addFloorModal) {
+        cancelFloorModalBtn.addEventListener("click", () => {
+            addFloorModal.classList.add("hidden");
+        });
+    }
+
+    // Preset chips in 2nd Floor Modal
+    document.querySelectorAll("#add-floor-modal .chip-btn").forEach(chip => {
+        chip.addEventListener("click", () => {
+            const preset = chip.dataset.preset;
+            const promptInput = document.getElementById("floor2-prompt-input");
+            if (preset && promptInput) {
+                promptInput.value = preset;
+            }
+        });
+    });
+
+    if (submitFloor2Btn) {
+        submitFloor2Btn.addEventListener("click", async () => {
+            const promptInput = document.getElementById("floor2-prompt-input");
+            const promptText = promptInput ? promptInput.value.trim() : "";
+            if (!promptText) return;
+
+            const spinner = document.getElementById("floor2-spinner");
+            const btnText = submitFloor2Btn.querySelector(".btn-text");
+
+            submitFloor2Btn.disabled = true;
+            if (spinner) spinner.classList.remove("hidden");
+            if (btnText) btnText.innerText = "Extruding 2nd Floor...";
+
+            try {
+                const response = await fetch("/api/generate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        prompt: promptText,
+                        floor_index: 1,
+                        base_y: 2.8
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Failed to generate second floor");
+                }
+
+                floor2SceneData = data;
+                if (addFloorModal) addFloorModal.classList.add("hidden");
+                activeFloorFilter = "both";
+                buildCombinedMultiFloorScene();
+
+                const statusText = document.getElementById("ai-status");
+                if (statusText) statusText.innerText = "Level 2 Built • Connecting Stairs & Balcony Active";
+
+            } catch (err) {
+                console.error("Floor 2 error:", err);
+                alert("Error generating second floor: " + err.message);
+            } finally {
+                submitFloor2Btn.disabled = false;
+                if (spinner) spinner.classList.add("hidden");
+                if (btnText) btnText.innerText = "🏗️ BUILD 2ND FLOOR";
+            }
+        });
+    }
 
     // Wall Color Picker
     document.getElementById("wall-color-picker").addEventListener("input", (e) => {
@@ -1663,10 +2494,25 @@ window.addEventListener("DOMContentLoaded", () => {
             enhanced_prompt: "Contemporary 2-bedroom layout featuring an open-plan living and dining core, adjacent chef's kitchen, private master bedroom, guest bedroom, and central full bathroom with full doorway connectivity.",
             engine: "Visionect Topological CAD",
             world_size: { width: 16, depth: 13 },
+            bounding_box: [-8, 8, -6.5, 6.5],
             total_walls: 18,
             total_rooms: 5,
             total_doors: 4,
             total_windows: 5
+        },
+        roof: {
+            type: "hipped_hut",
+            base_y: 2.8,
+            height: 2.5,
+            overhang: 0.5,
+            bounds: [-8, 8, -6.5, 6.5]
+        },
+        stairs: {
+            start: [-1.0, 0.0, -1.0],
+            end: [-1.0, 2.8, 2.2],
+            num_steps: 14,
+            width: 1.1,
+            cutout: { min_x: -1.8, max_x: 0.5, min_z: -1.5, max_z: 2.5 }
         },
         rooms: [
             { id: "living", name: "Living & Dining", type: "living", center: [-3.5, 0, -3], size: [9, 7], area_sqm: 63, color: "#e2e8f0" },
@@ -1753,7 +2599,8 @@ window.addEventListener("DOMContentLoaded", () => {
         ]
     };
 
-    build3DScene(initialScene);
+    floor1SceneData = initialScene;
+    buildCombinedMultiFloorScene();
 
     if (window.location.search.includes("view=studio") || window.location.hash === "#studio") {
         switchView("studio");
